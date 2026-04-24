@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -188,4 +189,24 @@
   position: absolute;
   pointer-events: auto;
   cursor: pointer;
+}
+
+/* Markdown prose enhancements */
+.prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  font-style: italic;
+  color: var(--muted-foreground);
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose a:hover {
+  opacity: 0.8;
 }

@@ -15,11 +15,12 @@ describe("tauri fs helpers", () => {
     it("classifies editable project files", () => {
       expect(getProjectFileType("main.tex")).toBe("tex");
       expect(getProjectFileType("chapter.TEX")).toBe("tex");
+      expect(getProjectFileType("README.md")).toBe("md");
+      expect(getProjectFileType("notes.MARKDOWN")).toBe("md");
       expect(getProjectFileType("refs.bib")).toBe("bib");
       expect(getProjectFileType("output.pdf")).toBe("pdf");
       expect(getProjectFileType("figure.png")).toBe("image");
       expect(getProjectFileType("custom.sty")).toBe("style");
-      expect(getProjectFileType("notes.md")).toBe("other");
       expect(getProjectFileType("script.py")).toBe("other");
     });
 

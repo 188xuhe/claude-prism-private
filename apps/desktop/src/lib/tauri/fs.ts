@@ -18,6 +18,7 @@ const log = createLogger("fs");
 
 export type ProjectFileType =
   | "tex"
+  | "md"
   | "image"
   | "pdf"
   | "bib"
@@ -140,6 +141,7 @@ export function getProjectFileType(name: string): ProjectFileType | null {
     if (lower.endsWith(ext)) return null;
   }
   if (lower.endsWith(".tex") || lower.endsWith(".ltx")) return "tex";
+  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "md";
   if (lower.endsWith(".bib")) return "bib";
   if (lower.endsWith(".pdf")) return "pdf";
   for (const ext of IMAGE_EXTENSIONS) {
@@ -176,9 +178,10 @@ export async function scanProjectFolder(rootPath: string): Promise<ScanResult> {
         await walk(entryPath, relativePath);
       } else {
         const type = getProjectFileType(entry.name);
+        log.info(`Scanned file: ${entry.name}, type: ${type}`);
         if (type) {
           // Only stat files that may be skipped by the large-file threshold
-          // (image and other). tex/bib/style are always loaded, pdf is always lazy.
+          // (image and other). tex/md/bib/style are always loaded, pdf is always lazy.
           let fileSize = 0;
           if (type === "image" || type === "other") {
             try {
