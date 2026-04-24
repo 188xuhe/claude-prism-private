@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
+import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
   keymap,
@@ -16,7 +16,7 @@ import {
   indentLess,
   toggleComment,
 } from "@codemirror/commands";
-import { syntaxHighlighting, syntaxTreeAvailable } from "@codemirror/language";
+import { syntaxHighlighting } from "@codemirror/language";
 import { oneDark, oneDarkHighlightStyle } from "@codemirror/theme-one-dark";
 import { defaultHighlightStyle } from "@codemirror/language";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
@@ -29,13 +29,17 @@ import {
   findNext,
   findPrevious,
 } from "@codemirror/search";
-import { linter, lintGutter, forEachDiagnostic, type Diagnostic } from "@codemirror/lint";
-import { useDocumentStore, type ProjectFile } from "@/stores/document-store";
+import { forEachDiagnostic } from "@codemirror/lint";
+import { useDocumentStore } from "@/stores/document-store";
 import { MarkdownToolbar } from "./markdown-toolbar";
 import { SearchPanel } from "./search-panel";
 import { ProblemsPanel, type DiagnosticItem } from "./problems-panel";
-import { readFile } from "@tauri-apps/plugin-fs";
 import { ImagePreview } from "./image-preview";
+import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
+import { join } from "@tauri-apps/api/path";
+import { createLogger } from "@/lib/debug/logger";
+
+const log = createLogger("markdown-editor");
 
 /** Per-file editor state cache: fileId → { cursor, scrollTop } */
 const editorStateCache = new Map<
@@ -68,6 +72,77 @@ export function MarkdownEditor() {
     isTextFile && activeFileContent === undefined && !!activeFile;
   const isContentLoaded = activeFileContent !== undefined;
   const loadFileContent = useDocumentStore((s) => s.loadFileContent);
+  const refreshFiles = useDocumentStore((s) => s.refreshFiles);
+
+  // Handle image paste - save to assets/images and insert markdown link
+  const handleImagePaste = useCallback(async (file: File): Promise<boolean> => {
+    if (!projectRoot || !viewRef.current) return false;
+
+    try {
+      // Create assets/images directory if not exists
+      const assetsDir = await join(projectRoot, "assets", "images");
+      await mkdir(assetsDir, { recursive: true });
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const ext = file.name.split(".").pop() || "png";
+      const fileName = `image-${timestamp}.${ext}`;
+      const filePath = await join(assetsDir, fileName);
+
+      // Read file content and save
+      const arrayBuffer = await file.arrayBuffer();
+      await writeFile(filePath, new Uint8Array(arrayBuffer));
+
+      log.info("Image saved", { path: filePath });
+
+      // Insert markdown image syntax at cursor position
+      const view = viewRef.current;
+      const { from } = view.state.selection.main;
+      const relativePath = `assets/images/${fileName}`;
+      const imageMarkdown = `![${file.name.replace(/\.[^.]+$/, "")}](${relativePath})`;
+
+      view.dispatch({
+        changes: { from, to: from, insert: imageMarkdown },
+        selection: { anchor: from + imageMarkdown.length },
+      });
+
+      // Refresh file tree to show new image
+      refreshFiles().catch((err) => log.error("Failed to refresh files", { error: String(err) }));
+
+      return true;
+    } catch (err) {
+      log.error("Failed to save pasted image", { error: String(err) });
+      return false;
+    }
+  }, [projectRoot, refreshFiles]);
+
+  // Paste event handler for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (!isTextFile || !isContentLoaded) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            await handleImagePaste(file);
+          }
+          return;
+        }
+      }
+    };
+
+    // Add paste listener to the editor container
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener("paste", handlePaste);
+      return () => container.removeEventListener("paste", handlePaste);
+    }
+  }, [isTextFile, isContentLoaded, handleImagePaste]);
 
   const [imageScale, setImageScale] = useState(1.0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -433,10 +508,7 @@ export function MarkdownEditor() {
       )}
       {/* Text editor content */}
       {!isPdf && !isImage && !isLargeFileNotLoaded && isContentLoaded && (
-        <div
-          ref={containerRef}
-          className="min-h-0 flex-1 overflow-hidden"
-        />
+        <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
       )}
       {/* Loading state for text files */}
       {!isPdf && !isImage && !isLargeFileNotLoaded && !isContentLoaded && (
@@ -455,23 +527,26 @@ export function MarkdownEditor() {
         />
       )}
       {/* Problems panel */}
-      {!isPdf && !isImage && !isLargeFileNotLoaded && diagnostics.length > 0 && (
-        <ProblemsPanel
-          diagnostics={diagnostics}
-          fileName={activeFile?.relativePath ?? "README.md"}
-          onNavigate={(from) => {
-            const view = viewRef.current;
-            if (!view) return;
-            view.dispatch({
-              selection: { anchor: from },
-              effects: EditorView.scrollIntoView(from, { y: "center" }),
-            });
-            view.focus();
-          }}
-          onFixWithChat={() => {}}
-          onFixAllWithChat={() => {}}
-        />
-      )}
+      {!isPdf &&
+        !isImage &&
+        !isLargeFileNotLoaded &&
+        diagnostics.length > 0 && (
+          <ProblemsPanel
+            diagnostics={diagnostics}
+            fileName={activeFile?.relativePath ?? "README.md"}
+            onNavigate={(from) => {
+              const view = viewRef.current;
+              if (!view) return;
+              view.dispatch({
+                selection: { anchor: from },
+                effects: EditorView.scrollIntoView(from, { y: "center" }),
+              });
+              view.focus();
+            }}
+            onFixWithChat={() => {}}
+            onFixAllWithChat={() => {}}
+          />
+        )}
     </div>
   );
 }

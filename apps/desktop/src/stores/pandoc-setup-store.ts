@@ -13,7 +13,12 @@ interface PandocStatus {
   path: string | null;
 }
 
-type PandocSetupStatus = "checking" | "not-installed" | "installing" | "ready" | "error";
+type PandocSetupStatus =
+  | "checking"
+  | "not-installed"
+  | "installing"
+  | "ready"
+  | "error";
 
 interface PandocSetupState {
   status: PandocSetupStatus;
@@ -107,7 +112,8 @@ export const usePandocSetupStore = create<PandocSetupState>((set, get) => ({
     } else {
       set({
         status: "error",
-        error: "Pandoc installation failed. Please try again or install manually.",
+        error:
+          "Pandoc installation failed. Please try again or install manually.",
         installOutput: [],
       });
     }
@@ -126,9 +132,12 @@ export async function setupPandocEventListeners(): Promise<void> {
     usePandocSetupStore.getState()._addOutput(event.payload);
   });
 
-  unlistenComplete = await listen<boolean>("pandoc-install-complete", (event) => {
-    usePandocSetupStore.getState()._finishInstall(event.payload);
-  });
+  unlistenComplete = await listen<boolean>(
+    "pandoc-install-complete",
+    (event) => {
+      usePandocSetupStore.getState()._finishInstall(event.payload);
+    },
+  );
 
   // Signal that listeners are ready
   usePandocSetupStore.getState().setListenersReady(true);

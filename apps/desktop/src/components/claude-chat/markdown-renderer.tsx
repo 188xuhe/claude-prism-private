@@ -1,8 +1,9 @@
-import { type FC, useCallback, useState } from "react";
+import { type FC, useCallback, useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import mermaid from "mermaid";
 import {
   PlusIcon,
   PlayIcon,
@@ -17,6 +18,13 @@ import { invoke } from "@tauri-apps/api/core";
 import "katex/dist/katex.min.css";
 
 import { useDocumentStore } from "@/stores/document-store";
+
+// Initialize mermaid
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "default",
+  securityLevel: "loose",
+});
 
 // ─── Shell Detection ───
 
@@ -68,6 +76,59 @@ function isShellCodeBlock(language: string, code: string): boolean {
   return false;
 }
 
+// ─── Mermaid Block ───
+
+const MermaidBlock: FC<{ code: string }> = ({ code }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const render = async () => {
+      try {
+        // Clear previous content
+        containerRef.current!.innerHTML = "";
+
+        // Generate unique ID for this diagram
+        const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        // Render mermaid
+        const { svg } = await mermaid.render(id, code);
+        containerRef.current!.innerHTML = svg;
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+        containerRef.current!.innerHTML = "";
+      }
+    };
+
+    render();
+  }, [code]);
+
+  if (error) {
+    return (
+      <div className="my-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+        <div className="flex items-center gap-2 text-destructive text-sm">
+          <AlertTriangleIcon className="size-4" />
+          <span>Mermaid syntax error</span>
+        </div>
+        <pre className="mt-2 overflow-auto font-mono text-destructive/80 text-xs">
+          {error}
+        </pre>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="my-2 overflow-auto rounded-lg bg-muted/50 p-4"
+    />
+  );
+};
+
 // ─── Markdown Renderer ───
 
 interface MarkdownRendererProps {
@@ -102,6 +163,11 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
                 {children}
               </code>
             );
+          }
+
+          // Handle mermaid diagrams
+          if (language === "mermaid") {
+            return <MermaidBlock code={code} />;
           }
 
           return <CodeBlock language={language || ""} code={code} />;
@@ -173,8 +239,9 @@ const CodeBlock: FC<{ language: string; code: string }> = ({
         .catch((err) => {
           console.error("Failed to refresh files:", err);
         });
-    } catch (err: any) {
-      setRunState({ status: "error", message: err?.message || String(err) });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setRunState({ status: "error", message });
     }
   }, [cleanedCommand, projectRoot]);
 

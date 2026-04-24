@@ -82,9 +82,29 @@ interface TocItem {
   line: number;
 }
 
-function parseTableOfContents(content: string): TocItem[] {
+function parseTableOfContents(content: string, fileType?: string): TocItem[] {
   const lines = content.split("\n");
   const toc: TocItem[] = [];
+
+  // Markdown headings: # ## ### etc.
+  if (fileType === "md") {
+    const headingRegex = /^(#{1,6})\s+(.+)$/;
+    lines.forEach((line, index) => {
+      const match = line.match(headingRegex);
+      if (match) {
+        const hashes = match[1];
+        const title = match[2].trim();
+        toc.push({
+          level: hashes.length,
+          title,
+          line: index + 1,
+        });
+      }
+    });
+    return toc;
+  }
+
+  // LaTeX sections
   const sectionRegex =
     /\\(section|subsection|subsubsection|chapter|part)\*?\s*\{([^}]*)\}/;
   const levelMap: Record<string, number> = {
@@ -207,8 +227,9 @@ function useAppVersion() {
 
 export function Sidebar() {
   const appVersion = useAppVersion();
-  const files = useDocumentStore((s) => s.files);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
+  const files = useDocumentStore((s) => s.files);
+  const activeFile = files.find((f) => f.id === activeFileId);
   const setActiveFile = useDocumentStore((s) => s.setActiveFile);
   const deleteFile = useDocumentStore((s) => s.deleteFile);
   const deleteFolder = useDocumentStore((s) => s.deleteFolder);
@@ -216,10 +237,7 @@ export function Sidebar() {
   const createNewFile = useDocumentStore((s) => s.createNewFile);
   const createFolder = useDocumentStore((s) => s.createFolder);
   const importFiles = useDocumentStore((s) => s.importFiles);
-  const activeFileContent = useDocumentStore((s) => {
-    const active = s.files.find((f) => f.id === s.activeFileId);
-    return active?.content ?? "";
-  });
+  const activeFileContent = activeFile?.content ?? "";
   const requestJumpToPosition = useDocumentStore(
     (s) => s.requestJumpToPosition,
   );
@@ -469,8 +487,8 @@ export function Sidebar() {
 
   // Outline
   const toc = useMemo(
-    () => parseTableOfContents(activeFileContent),
-    [activeFileContent],
+    () => parseTableOfContents(activeFileContent, activeFile?.type),
+    [activeFileContent, activeFile?.type],
   );
   const handleTocClick = useCallback(
     (line: number) => {

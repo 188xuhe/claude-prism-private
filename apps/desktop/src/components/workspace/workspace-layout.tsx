@@ -14,7 +14,14 @@ export function WorkspaceLayout() {
   const isMarkdown = activeFile?.type === "md";
 
   // Debug log for file type routing
-  console.log("[WorkspaceLayout] activeFile:", activeFile?.name, "type:", activeFile?.type, "isMarkdown:", isMarkdown);
+  console.log(
+    "[WorkspaceLayout] activeFile:",
+    activeFile?.name,
+    "type:",
+    activeFile?.type,
+    "isMarkdown:",
+    isMarkdown,
+  );
 
   if (!initialized) {
     return (

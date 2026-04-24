@@ -41,7 +41,10 @@ export function MarkdownPreview() {
 
   // Debug log for content changes
   useEffect(() => {
-    log.info("Preview content updated", { length: activeFileContent.length, generation: contentGeneration });
+    log.info("Preview content updated", {
+      length: activeFileContent.length,
+      generation: contentGeneration,
+    });
   }, [activeFileContent, contentGeneration]);
 
   const [isExporting, setIsExporting] = useState(false);
@@ -118,7 +121,9 @@ export function MarkdownPreview() {
         return (
           <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1">
             <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
-            <span className="font-medium text-muted-foreground text-xs">Checking...</span>
+            <span className="font-medium text-muted-foreground text-xs">
+              Checking...
+            </span>
           </div>
         );
       case "installing":
@@ -141,7 +146,7 @@ export function MarkdownPreview() {
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 gap-1.5 px-2.5 text-xs text-orange-500"
+            className="h-7 gap-1.5 px-2.5 text-orange-500 text-xs"
             onClick={installPandoc}
             title="Retry pandoc installation"
           >
@@ -196,8 +201,8 @@ export function MarkdownPreview() {
 
       {/* Installation progress */}
       {pandocStatus === "installing" && installOutput.length > 0 && (
-        <div className="shrink-0 max-h-24 overflow-auto border-b border-border bg-blue-500/5 p-2">
-          <pre className="font-mono text-blue-600 text-xs whitespace-pre-wrap">
+        <div className="max-h-24 shrink-0 overflow-auto border-border border-b bg-blue-500/5 p-2">
+          <pre className="whitespace-pre-wrap font-mono text-blue-600 text-xs">
             {installOutput.join("\n")}
           </pre>
         </div>
@@ -205,10 +210,12 @@ export function MarkdownPreview() {
 
       {/* Error banner */}
       {(pandocError || exportError) && activeFile?.type === "md" && (
-        <div className="shrink-0 border-b border-border bg-destructive/10 px-4 py-2">
+        <div className="shrink-0 border-border border-b bg-destructive/10 px-4 py-2">
           <div className="flex items-center gap-2">
             <AlertCircleIcon className="size-4 text-destructive" />
-            <span className="text-destructive text-sm">{exportError || pandocError}</span>
+            <span className="text-destructive text-sm">
+              {exportError || pandocError}
+            </span>
           </div>
         </div>
       )}
