@@ -1,43 +1,48 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LoaderIcon,
   AlertCircleIcon,
   FileTextIcon,
   DownloadIcon,
+  HistoryIcon,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { exportElementToPdf } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
-import { MarkdownRenderer } from "@/components/claude-chat/markdown-renderer";
-import { useDocumentStore } from "@/stores/document-store";
 import {
-  usePandocSetupStore,
-  setupPandocEventListeners,
-  cleanupPandocEventListeners,
-} from "@/stores/pandoc-setup-store";
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import { MarkdownRenderer } from "@/components/claude-chat/markdown-renderer";
+import { FileHistoryPanel } from "@/components/workspace/file-history-panel";
+import { useDocumentStore } from "@/stores/document-store";
 import { createLogger } from "@/lib/debug/logger";
 
 const log = createLogger("markdown-preview");
 
+/** Slugify a heading title to match react-markdown's generated ID. */
+function slugifyHeading(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+}
+
 export function MarkdownPreview() {
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const files = useDocumentStore((s) => s.files);
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const activeFile = files.find((f) => f.id === activeFileId);
   // Subscribe to contentGeneration to force re-renders when content changes
   const contentGeneration = useDocumentStore((s) => s.contentGeneration);
+  const scrollToHeading = useDocumentStore((s) => s.scrollToHeading);
+  const clearScrollToHeading = useDocumentStore((s) => s.clearScrollToHeading);
 
   // Get content from the active file - contentGeneration in dependency ensures updates
   const activeFileContent = activeFile?.content ?? "";
-
-  // Pandoc setup state
-  const pandocStatus = usePandocSetupStore((s) => s.status);
-  const pandocVersion = usePandocSetupStore((s) => s.version);
-  const pandocError = usePandocSetupStore((s) => s.error);
-  const installOutput = usePandocSetupStore((s) => s.installOutput);
-  const checkPandocStatus = usePandocSetupStore((s) => s.checkStatus);
-  const installPandoc = usePandocSetupStore((s) => s.install);
 
   // Debug log for content changes
   useEffect(() => {
@@ -47,45 +52,51 @@ export function MarkdownPreview() {
     });
   }, [activeFileContent, contentGeneration]);
 
+  // Scroll to heading when triggered by Outline click
+  useEffect(() => {
+    if (!scrollToHeading || !previewContainerRef.current) return;
+
+    const container = previewContainerRef.current;
+    const slugId = slugifyHeading(scrollToHeading.title);
+
+    // Try to find by ID first (react-markdown generates IDs)
+    let headingEl = container.querySelector(`#${slugId}`) as HTMLElement | null;
+
+    // If not found by ID, search by text content
+    if (!headingEl) {
+      const headings = container.querySelectorAll("h1, h2, h3, h4, h5, h6");
+      for (const h of headings) {
+        if (h.textContent?.trim() === scrollToHeading.title) {
+          headingEl = h as HTMLElement;
+          break;
+        }
+      }
+    }
+
+    if (headingEl) {
+      headingEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    clearScrollToHeading();
+  }, [scrollToHeading, clearScrollToHeading]);
+
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  // Setup event listeners and check pandoc status on mount
-  useEffect(() => {
-    // First set up listeners, then check status
-    setupPandocEventListeners().then(() => {
-      checkPandocStatus();
-    });
-
-    return () => {
-      cleanupPandocEventListeners();
-    };
-  }, [checkPandocStatus]);
-
   const handleExport = useCallback(async () => {
-    if (!activeFile || !projectRoot) return;
-
-    if (pandocStatus !== "ready") {
-      // If not ready, trigger installation
-      if (pandocStatus === "not-installed" || pandocStatus === "error") {
-        installPandoc();
-      }
-      return;
-    }
+    if (!activeFile || !previewContainerRef.current) return;
 
     setIsExporting(true);
     setExportError(null);
 
     try {
-      log.info("Starting PDF export with pandoc", { file: activeFile.name });
+      log.info("Starting PDF export", { file: activeFile.name });
 
-      // Call pandoc to convert markdown to PDF
-      const pdfBytes = await invoke<ArrayBuffer>("compile_markdown_to_pdf", {
-        workDir: projectRoot,
-        mdFile: activeFile.name,
-      });
-
-      log.info("PDF generated", { size: pdfBytes.byteLength });
+      // Get the content container (the scrollable div with rendered markdown)
+      const contentContainer = previewContainerRef.current.querySelector('.prose') as HTMLElement;
+      if (!contentContainer) {
+        throw new Error("Could not find content container");
+      }
 
       // Ask user where to save
       const defaultName = activeFile.name.replace(/\.md$/i, ".pdf");
@@ -94,12 +105,18 @@ export function MarkdownPreview() {
         filters: [{ name: "PDF", extensions: ["pdf"] }],
       });
 
-      if (savePath) {
-        // Write PDF file
-        await writeFile(savePath, new Uint8Array(pdfBytes));
-        log.info("PDF saved", { path: savePath });
+      if (!savePath) {
+        setIsExporting(false);
+        return;
       }
 
+      // Export the rendered content to PDF
+      await exportElementToPdf(contentContainer, {
+        filename: savePath.split('/').pop() || defaultName,
+        title: activeFile.name,
+      });
+
+      log.info("PDF exported successfully");
       setIsExporting(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -107,57 +124,12 @@ export function MarkdownPreview() {
       log.error("PDF export failed", { error: message });
       setIsExporting(false);
     }
-  }, [activeFile, projectRoot, pandocStatus, installPandoc]);
+  }, [activeFile]);
 
   // Clear error when file changes
   useEffect(() => {
     setExportError(null);
   }, [activeFile?.id]);
-
-  // Render status indicator
-  const renderStatus = () => {
-    switch (pandocStatus) {
-      case "checking":
-        return (
-          <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1">
-            <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
-            <span className="font-medium text-muted-foreground text-xs">
-              Checking...
-            </span>
-          </div>
-        );
-      case "installing":
-        return (
-          <div className="flex items-center gap-1.5 rounded-md bg-blue-500/10 px-2 py-1">
-            <LoaderIcon className="size-3.5 animate-spin text-blue-500" />
-            <span className="font-medium text-blue-600 text-xs">
-              Installing pandoc...
-            </span>
-          </div>
-        );
-      case "ready":
-        return (
-          <span className="text-muted-foreground text-xs">
-            v{pandocVersion}
-          </span>
-        );
-      case "error":
-        return (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 px-2.5 text-orange-500 text-xs"
-            onClick={installPandoc}
-            title="Retry pandoc installation"
-          >
-            <AlertCircleIcon className="size-3.5" />
-            Retry Install
-          </Button>
-        );
-      default:
-        return null;
-    }
-  };
 
   return (
     <div className="flex h-full flex-col bg-muted/50">
@@ -173,8 +145,7 @@ export function MarkdownPreview() {
         <div className="flex shrink-0 items-center gap-2">
           {activeFile?.type === "md" && (
             <>
-              {renderStatus()}
-              {!isExporting && pandocStatus === "ready" && (
+              {!isExporting && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -196,47 +167,60 @@ export function MarkdownPreview() {
               )}
             </>
           )}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                title="History"
+              >
+                <HistoryIcon className="size-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-96">
+              {activeFile?.relativePath && (
+                <FileHistoryPanel
+                  filePath={activeFile.relativePath}
+                  maxHeight="max-h-[32rem]"
+                />
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
-      {/* Installation progress */}
-      {pandocStatus === "installing" && installOutput.length > 0 && (
-        <div className="max-h-24 shrink-0 overflow-auto border-border border-b bg-blue-500/5 p-2">
-          <pre className="whitespace-pre-wrap font-mono text-blue-600 text-xs">
-            {installOutput.join("\n")}
-          </pre>
-        </div>
-      )}
-
       {/* Error banner */}
-      {(pandocError || exportError) && activeFile?.type === "md" && (
+      {exportError && activeFile?.type === "md" && (
         <div className="shrink-0 border-border border-b bg-destructive/10 px-4 py-2">
           <div className="flex items-center gap-2">
             <AlertCircleIcon className="size-4 text-destructive" />
             <span className="text-destructive text-sm">
-              {exportError || pandocError}
+              {exportError}
             </span>
           </div>
         </div>
       )}
 
       {/* Preview content */}
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        {activeFile?.type === "md" && activeFileContent ? (
-          <MarkdownRenderer
-            content={activeFileContent}
-            className="prose prose-sm dark:prose-invert max-w-none"
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center">
-            <FileTextIcon className="mb-4 size-12 text-muted-foreground/50" />
-            <p className="text-center text-muted-foreground text-sm">
-              {activeFile?.type !== "md"
-                ? "Select a Markdown file to preview"
-                : "Empty file"}
-            </p>
-          </div>
-        )}
+      <div ref={previewContainerRef} className="min-h-0 flex-1 overflow-hidden p-4">
+        <div className="h-full overflow-auto">
+          {activeFile?.type === "md" && activeFileContent ? (
+            <MarkdownRenderer
+              content={activeFileContent}
+              className="prose prose-sm dark:prose-invert max-w-none"
+            />
+          ) : (
+            <div className="flex h-full flex-col items-center justify-center">
+              <FileTextIcon className="mb-4 size-12 text-muted-foreground/50" />
+              <p className="text-center text-muted-foreground text-sm">
+                {activeFile?.type !== "md"
+                  ? "Select a Markdown file to preview"
+                  : "Empty file"}
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
