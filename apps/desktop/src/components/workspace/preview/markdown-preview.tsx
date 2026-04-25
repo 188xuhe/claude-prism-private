@@ -7,6 +7,7 @@ import {
   HistoryIcon,
 } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
+import { writeFile } from "@tauri-apps/plugin-fs";
 import { exportElementToPdf } from "@/lib/pdf-export";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,7 +94,9 @@ export function MarkdownPreview() {
       log.info("Starting PDF export", { file: activeFile.name });
 
       // Get the content container (the scrollable div with rendered markdown)
-      const contentContainer = previewContainerRef.current.querySelector('.prose') as HTMLElement;
+      const contentContainer = previewContainerRef.current.querySelector(
+        ".prose",
+      ) as HTMLElement;
       if (!contentContainer) {
         throw new Error("Could not find content container");
       }
@@ -110,13 +113,15 @@ export function MarkdownPreview() {
         return;
       }
 
-      // Export the rendered content to PDF
-      await exportElementToPdf(contentContainer, {
-        filename: savePath.split('/').pop() || defaultName,
+      // Export the rendered content to PDF and get bytes
+      const pdfBytes = await exportElementToPdf(contentContainer, {
         title: activeFile.name,
       });
 
-      log.info("PDF exported successfully");
+      // Save PDF bytes to user-selected path using Tauri fs
+      await writeFile(savePath, pdfBytes);
+
+      log.info("PDF exported successfully", { path: savePath });
       setIsExporting(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -195,15 +200,16 @@ export function MarkdownPreview() {
         <div className="shrink-0 border-border border-b bg-destructive/10 px-4 py-2">
           <div className="flex items-center gap-2">
             <AlertCircleIcon className="size-4 text-destructive" />
-            <span className="text-destructive text-sm">
-              {exportError}
-            </span>
+            <span className="text-destructive text-sm">{exportError}</span>
           </div>
         </div>
       )}
 
       {/* Preview content */}
-      <div ref={previewContainerRef} className="min-h-0 flex-1 overflow-hidden p-4">
+      <div
+        ref={previewContainerRef}
+        className="min-h-0 flex-1 overflow-hidden p-4"
+      >
         <div className="h-full overflow-auto">
           {activeFile?.type === "md" && activeFileContent ? (
             <MarkdownRenderer

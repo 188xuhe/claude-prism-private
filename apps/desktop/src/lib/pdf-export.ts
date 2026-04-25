@@ -5,27 +5,21 @@ import { createLogger } from "./debug/logger";
 const log = createLogger("pdf-export");
 
 export interface PdfExportOptions {
-  filename: string;
   title?: string;
 }
 
 /**
  * Export a DOM element to PDF using html2canvas + jsPDF.
  * Captures the element as images and assembles them into pages.
+ * Returns the PDF as a Uint8Array for the caller to save.
  */
 export async function exportElementToPdf(
   element: HTMLElement,
-  options: PdfExportOptions,
-): Promise<void> {
-  const { filename, title } = options;
-
-  // Ensure filename has .pdf extension
-  const normalizedFilename = filename.endsWith(".pdf")
-    ? filename
-    : `${filename}.pdf`;
+  options?: PdfExportOptions,
+): Promise<Uint8Array> {
+  const { title } = options ?? {};
 
   log.info("Starting PDF export", {
-    filename: normalizedFilename,
     elementSize: element.getBoundingClientRect(),
   });
 
@@ -86,15 +80,17 @@ export async function exportElementToPdf(
       }
     }
 
-    log.info("PDF generated, saving...", { pageCount: pdf.getNumberOfPages() });
+    log.info("PDF generated, getting bytes...", {
+      pageCount: pdf.getNumberOfPages(),
+    });
 
-    // Save the PDF
-    pdf.save(normalizedFilename);
+    // Return PDF as Uint8Array
+    const pdfBytes = pdf.output("arraybuffer");
+    log.info("PDF bytes generated", { size: pdfBytes.byteLength });
 
-    log.info("PDF saved successfully", { filename: normalizedFilename });
+    return new Uint8Array(pdfBytes);
   } catch (error) {
     log.error("PDF export failed", {
-      filename: normalizedFilename,
       error: error instanceof Error ? error.message : String(error),
     });
     throw new Error(
@@ -115,9 +111,9 @@ export async function exportElementToPdf(
  * isolated context, which could lead to styling inconsistencies.
  */
 export async function exportMarkdownToPdf(
-  content: string,
-  options: PdfExportOptions,
-): Promise<void> {
+  _content: string,
+  _options?: PdfExportOptions,
+): Promise<Uint8Array> {
   // This will be called from the preview component which already has rendered content
   // We'll use exportElementToPdf directly on the preview container
   throw new Error(
