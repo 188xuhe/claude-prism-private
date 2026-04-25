@@ -246,6 +246,23 @@ fn open_debug_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// --- Toggle DevTools ---
+
+#[tauri::command]
+fn toggle_devtools(app: tauri::AppHandle) -> Result<bool, String> {
+    if let Some(window) = app.get_webview_window("main") {
+        if window.is_devtools_open() {
+            window.close_devtools();
+            Ok(false)
+        } else {
+            window.open_devtools();
+            Ok(true)
+        }
+    } else {
+        Err("Main window not found".to_string())
+    }
+}
+
 // --- System info for debug panel & bug reports ---
 
 #[derive(serde::Serialize)]
@@ -376,9 +393,6 @@ pub fn run() {
             latex::compile_latex,
             latex::synctex_edit,
             latex::detect_texlive,
-            markdown::compile_markdown_to_pdf,
-            markdown::detect_pandoc,
-            markdown::install_pandoc,
             pdf_export::export_markdown_to_pdf,
             claude::check_claude_status,
             claude::install_claude_cli,
@@ -401,6 +415,7 @@ pub fn run() {
             history::history_diff,
             history::history_file_at,
             history::history_restore,
+            history::history_restore_file,
             history::history_add_label,
             history::history_remove_label,
             slash_commands::slash_commands_list,
@@ -421,6 +436,7 @@ pub fn run() {
             uv::uv_run_command,
             get_system_info,
             open_debug_window,
+            toggle_devtools,
             license::get_machine_id,
             license::check_license,
             license::activate_license,
