@@ -15,11 +15,14 @@ export interface PdfExportOptions {
  */
 export async function exportElementToPdf(
   element: HTMLElement,
-  options: PdfExportOptions
+  options: PdfExportOptions,
 ): Promise<void> {
   const { filename, title } = options;
 
-  log.info("Starting PDF export", { filename, elementSize: element.getBoundingClientRect() });
+  log.info("Starting PDF export", {
+    filename,
+    elementSize: element.getBoundingClientRect(),
+  });
 
   // Capture the element as canvas
   const canvas = await html2canvas(element, {
@@ -91,9 +94,11 @@ export async function exportElementToPdf(
  */
 export async function exportMarkdownToPdf(
   content: string,
-  options: PdfExportOptions
+  options: PdfExportOptions,
 ): Promise<void> {
   // This will be called from the preview component which already has rendered content
   // We'll use exportElementToPdf directly on the preview container
-  throw new Error("Use exportElementToPdf directly on the preview container element");
+  throw new Error(
+    "Use exportElementToPdf directly on the preview container element",
+  );
 }
