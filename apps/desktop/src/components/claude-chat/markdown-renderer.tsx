@@ -19,11 +19,12 @@ import "katex/dist/katex.min.css";
 
 import { useDocumentStore } from "@/stores/document-store";
 
-// Initialize mermaid
+// Initialize mermaid with error suppression
 mermaid.initialize({
   startOnLoad: false,
   theme: "default",
   securityLevel: "loose",
+  suppressErrorRendering: true,
 });
 
 // ─── Shell Detection ───
@@ -90,17 +91,53 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
         // Clear previous content
         containerRef.current!.innerHTML = "";
 
+        // Clean up any mermaid error elements from previous failed renders
+        document.querySelectorAll(".mermaid-error").forEach((el) => el.remove());
+
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
         // Render mermaid
         const { svg } = await mermaid.render(id, code);
-        containerRef.current!.innerHTML = svg;
+
+        // Insert SVG and constrain its size
+        const container = containerRef.current!;
+        container.innerHTML = svg;
+
+        // Ensure SVG fits within container
+        const svgEl = container.querySelector("svg");
+        if (svgEl) {
+          // Critical: set viewBox if not present to enable proper scaling
+          if (!svgEl.hasAttribute("viewBox")) {
+            const width = svgEl.getAttribute("width");
+            const height = svgEl.getAttribute("height");
+            if (width && height) {
+              svgEl.setAttribute("viewBox", `0 0 ${parseFloat(width)} ${parseFloat(height)}`);
+            }
+          }
+          // Force constrained sizing
+          svgEl.removeAttribute("width");
+          svgEl.removeAttribute("height");
+          svgEl.style.maxWidth = "100%";
+          svgEl.style.width = "100%";
+          svgEl.style.height = "auto";
+          svgEl.style.display = "block";
+        }
+
         setError(null);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
         containerRef.current!.innerHTML = "";
+
+        // Clean up mermaid's injected error elements from DOM
+        document.querySelectorAll(".mermaid-error").forEach((el) => el.remove());
+        // Also remove any elements with the generated id that mermaid may have created
+        document.querySelectorAll(`[id^="mermaid-"]`).forEach((el) => {
+          if (!el.closest(".mermaid-block")) {
+            el.remove();
+          }
+        });
       }
     };
 
@@ -108,14 +145,16 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
   }, [code]);
 
   if (error) {
+    // Truncate error message to prevent overflow
+    const truncatedError = error.length > 200 ? `${error.slice(0, 200)}...` : error;
     return (
-      <div className="my-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+      <div className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg border border-destructive/30 bg-destructive/10 p-3">
         <div className="flex items-center gap-2 text-destructive text-sm">
-          <AlertTriangleIcon className="size-4" />
-          <span>Mermaid syntax error</span>
+          <AlertTriangleIcon className="size-4 shrink-0" />
+          <span className="font-medium">Mermaid syntax error</span>
         </div>
-        <pre className="mt-2 overflow-auto font-mono text-destructive/80 text-xs">
-          {error}
+        <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words font-mono text-destructive/80 text-xs">
+          {truncatedError}
         </pre>
       </div>
     );
@@ -124,7 +163,7 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
   return (
     <div
       ref={containerRef}
-      className="my-2 overflow-auto rounded-lg bg-muted/50 p-4"
+      className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg bg-muted/50 p-4"
     />
   );
 };
@@ -150,7 +189,7 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
           return <>{children}</>;
         },
         code({ className: codeClassName, children, node, ...props }) {
-          const match = /language-(\w+)/.exec(codeClassName || "");
+          const match = /language-(\w+)/. exec(codeClassName || "");
           const language = match?.[1];
           const code = String(children).replace(/\n$/, "");
           const isBlock =
@@ -171,6 +210,43 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
           }
 
           return <CodeBlock language={language || ""} code={code} />;
+        },
+        // Add data-source-line for scroll sync
+        p({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <p data-source-line={line}>{children}</p>;
+        },
+        h1({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h1 data-source-line={line}>{children}</h1>;
+        },
+        h2({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h2 data-source-line={line}>{children}</h2>;
+        },
+        h3({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h3 data-source-line={line}>{children}</h3>;
+        },
+        h4({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h4 data-source-line={line}>{children}</h4>;
+        },
+        h5({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h5 data-source-line={line}>{children}</h5>;
+        },
+        h6({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <h6 data-source-line={line}>{children}</h6>;
+        },
+        li({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <li data-source-line={line}>{children}</li>;
+        },
+        blockquote({ node, children }) {
+          const line = node?.position?.start?.line;
+          return <blockquote data-source-line={line}>{children}</blockquote>;
         },
       }}
     >
