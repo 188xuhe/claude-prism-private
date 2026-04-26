@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { FileTextIcon, HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -74,7 +74,28 @@ export function MarkdownPreview() {
     clearScrollToHeading();
   }, [scrollToHeading, clearScrollToHeading]);
 
-  // Sync preview scroll with editor scroll position
+  // Cache elements with source lines for efficient scroll sync
+  const lineElementsCacheRef = useRef<Array<{ el: Element; line: number }>>([]);
+  const lastContentGenerationRef = useRef<number>(0);
+
+  // Update cache when content changes
+  useEffect(() => {
+    if (!previewContainerRef.current) return;
+    if (lastContentGenerationRef.current === contentGeneration) return;
+
+    lastContentGenerationRef.current = contentGeneration;
+    const container = previewContainerRef.current;
+    const elements = container.querySelectorAll("[data-source-line]");
+    lineElementsCacheRef.current = Array.from(elements).map((el) => ({
+      el,
+      line: parseInt(el.getAttribute("data-source-line") || "0", 10),
+    }));
+    log.info("Line elements cache rebuilt", {
+      count: lineElementsCacheRef.current.length,
+    });
+  }, [contentGeneration]);
+
+  // Sync preview scroll with editor scroll position (RAF throttled, binary search)
   useEffect(() => {
     if (!editorScrollLine || !previewContainerRef.current) return;
 
@@ -84,23 +105,33 @@ export function MarkdownPreview() {
     ) as HTMLElement;
     if (!scrollableArea) return;
 
-    // Find the element at or near the editor's current line
-    // Strategy: find closest element with data-source-line <= editorScrollLine
-    const elements = container.querySelectorAll("[data-source-line]");
-    let targetEl: Element | null = null;
+    // Use RAF to throttle scroll updates
+    requestAnimationFrame(() => {
+      const cache = lineElementsCacheRef.current;
+      if (cache.length === 0) return;
 
-    for (const el of elements) {
-      const elLine = parseInt(el.getAttribute("data-source-line") || "0", 10);
-      if (elLine <= editorScrollLine) {
-        targetEl = el;
-      } else {
-        break; // Found first element beyond current line
+      // Binary search for the closest element with line <= editorScrollLine
+      let left = 0;
+      let right = cache.length - 1;
+      let targetIdx = -1;
+
+      while (left <= right) {
+        const mid = Math.floor((left + right) / 2);
+        if (cache[mid].line <= editorScrollLine) {
+          targetIdx = mid;
+          left = mid + 1;
+        } else {
+          right = mid - 1;
+        }
       }
-    }
 
-    if (targetEl) {
-      targetEl.scrollIntoView({ behavior: "instant", block: "start" });
-    }
+      if (targetIdx >= 0) {
+        cache[targetIdx].el.scrollIntoView({
+          behavior: "instant",
+          block: "start",
+        });
+      }
+    });
   }, [editorScrollLine]);
 
   return (

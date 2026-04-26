@@ -412,18 +412,23 @@ export function MarkdownEditor() {
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
-    // Scroll sync: update store with current first visible line
+    // Scroll sync: update store with current first visible line (throttled with RAF)
+    let rafId: number | null = null;
     const handleScroll = () => {
-      const view = viewRef.current;
-      if (!view) return;
-      const scrollTop = view.scrollDOM.scrollTop;
-      // Get the line block at the scroll position
-      const block = view.lineBlockAtHeight(scrollTop);
-      const line = view.state.doc.lineAt(block.from).number;
-      setEditorScrollLine(line);
+      if (rafId !== null) return; // Already pending
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        const view = viewRef.current;
+        if (!view) return;
+        const scrollTop = view.scrollDOM.scrollTop;
+        // Get the line block at the scroll position
+        const block = view.lineBlockAtHeight(scrollTop);
+        const line = view.state.doc.lineAt(block.from).number;
+        setEditorScrollLine(line);
+      });
     };
 
-    view.scrollDOM.addEventListener("scroll", handleScroll);
+    view.scrollDOM.addEventListener("scroll", handleScroll, { passive: true });
 
     // Restore per-file cursor + scroll from cache
     const cached = editorStateCache.get(activeFileId);
@@ -441,7 +446,10 @@ export function MarkdownEditor() {
         cursor: view.state.selection.main.head,
         scrollTop: view.scrollDOM.scrollTop,
       });
-      // Clean up scroll listener
+      // Clean up scroll listener and pending RAF
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       view.scrollDOM.removeEventListener("scroll", handleScroll);
       view.destroy();
       viewRef.current = null;
@@ -650,25 +658,23 @@ export function MarkdownEditor() {
         <ClaudeChatDrawer />
       </div>
       {/* Problems panel */}
-      {!isPdf &&
-        !isLargeFileNotLoaded &&
-        diagnostics.length > 0 && (
-          <ProblemsPanel
-            diagnostics={diagnostics}
-            fileName={activeFile?.relativePath ?? "README.md"}
-            onNavigate={(from) => {
-              const view = viewRef.current;
-              if (!view) return;
-              view.dispatch({
-                selection: { anchor: from },
-                effects: EditorView.scrollIntoView(from, { y: "center" }),
-              });
-              view.focus();
-            }}
-            onFixWithChat={() => {}}
-            onFixAllWithChat={() => {}}
-          />
-        )}
+      {!isPdf && !isLargeFileNotLoaded && diagnostics.length > 0 && (
+        <ProblemsPanel
+          diagnostics={diagnostics}
+          fileName={activeFile?.relativePath ?? "README.md"}
+          onNavigate={(from) => {
+            const view = viewRef.current;
+            if (!view) return;
+            view.dispatch({
+              selection: { anchor: from },
+              effects: EditorView.scrollIntoView(from, { y: "center" }),
+            });
+            view.focus();
+          }}
+          onFixWithChat={() => {}}
+          onFixAllWithChat={() => {}}
+        />
+      )}
       {/* History label dialog */}
       <Dialog
         open={historyLabelDialogOpen}
