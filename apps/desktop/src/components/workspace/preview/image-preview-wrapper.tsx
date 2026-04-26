@@ -32,7 +32,9 @@ export function ImagePreviewWrapper() {
     // Load image content dynamically for large images
     const loadImage = async () => {
       try {
-        log.info("Loading large image dynamically", { path: activeFile.absolutePath });
+        log.info("Loading large image dynamically", {
+          path: activeFile.absolutePath,
+        });
         const bytes = await readFile(activeFile.absolutePath);
         const ext = activeFile.name.split(".").pop()?.toLowerCase() || "png";
         const mimeMap: Record<string, string> = {
@@ -143,7 +145,9 @@ export function ImagePreviewWrapper() {
           />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <div className="text-muted-foreground text-sm">Loading image...</div>
+            <div className="text-muted-foreground text-sm">
+              Loading image...
+            </div>
           </div>
         )}
       </div>
