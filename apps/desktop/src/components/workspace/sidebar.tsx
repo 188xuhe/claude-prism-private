@@ -83,22 +83,28 @@ interface TocItem {
 }
 
 function parseTableOfContents(content: string, fileType?: string): TocItem[] {
+  if (!content) return [];
+
   const lines = content.split("\n");
   const toc: TocItem[] = [];
 
   // Markdown headings: # ## ### etc.
-  if (fileType === "md") {
-    const headingRegex = /^(#{1,6})\s+(.+)$/;
+  if (fileType === "md" || fileType === "markdown") {
+    // More robust regex: allows optional leading whitespace
+    const headingRegex = /^\s*(#{1,6})\s+(.+)$/;
     lines.forEach((line, index) => {
       const match = line.match(headingRegex);
       if (match) {
         const hashes = match[1];
         const title = match[2].trim();
-        toc.push({
-          level: hashes.length,
-          title,
-          line: index + 1,
-        });
+        // Skip empty titles
+        if (title) {
+          toc.push({
+            level: hashes.length,
+            title,
+            line: index + 1,
+          });
+        }
       }
     });
     return toc;
@@ -240,6 +246,9 @@ export function Sidebar() {
   const activeFileContent = activeFile?.content ?? "";
   const requestJumpToPosition = useDocumentStore(
     (s) => s.requestJumpToPosition,
+  );
+  const requestScrollToHeading = useDocumentStore(
+    (s) => s.requestScrollToHeading,
   );
   const _insertAtCursor = useDocumentStore((s) => s.insertAtCursor);
   const moveFile = useDocumentStore((s) => s.moveFile);
@@ -486,20 +495,22 @@ export function Sidebar() {
   }, []);
 
   // Outline
-  const toc = useMemo(
-    () => parseTableOfContents(activeFileContent, activeFile?.type),
-    [activeFileContent, activeFile?.type],
-  );
+  const toc = useMemo(() => {
+    const fileType = activeFile?.type;
+    const result = parseTableOfContents(activeFileContent, fileType);
+    return result;
+  }, [activeFileContent, activeFile?.type]);
   const handleTocClick = useCallback(
-    (line: number) => {
+    (item: { title: string; line: number }) => {
       const lines = activeFileContent.split("\n");
       let position = 0;
-      for (let i = 0; i < line - 1 && i < lines.length; i++) {
+      for (let i = 0; i < item.line - 1 && i < lines.length; i++) {
         position += lines[i].length + 1;
       }
       requestJumpToPosition(position);
+      requestScrollToHeading(item);
     },
-    [activeFileContent, requestJumpToPosition],
+    [activeFileContent, requestJumpToPosition, requestScrollToHeading],
   );
 
   // Check if a name already exists in the given folder
@@ -794,7 +805,7 @@ export function Sidebar() {
                     key={index}
                     className="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-sidebar-accent/50"
                     style={{ paddingLeft: `${(item.level - 1) * 12 + 8}px` }}
-                    onClick={() => handleTocClick(item.line)}
+                    onClick={() => handleTocClick(item)}
                   >
                     <HashIcon className="size-3 shrink-0 text-muted-foreground" />
                     <span className="truncate">{item.title}</span>

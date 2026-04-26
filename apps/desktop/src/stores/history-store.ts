@@ -52,6 +52,11 @@ interface HistoryState {
     projectRoot: string,
     snapshotId: string,
   ) => Promise<SnapshotInfo>;
+  restoreFile: (
+    projectRoot: string,
+    snapshotId: string,
+    filePath: string,
+  ) => Promise<SnapshotInfo>;
   addLabel: (
     projectRoot: string,
     snapshotId: string,
@@ -167,6 +172,23 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
         snapshotId,
       });
       log.info(`Restored snapshot, new snapshot: ${result.id.slice(0, 8)}`);
+      set((s) => ({ snapshots: [result, ...s.snapshots] }));
+      return result;
+    } finally {
+      set({ isRestoring: false });
+    }
+  },
+
+  restoreFile: async (projectRoot, snapshotId, filePath) => {
+    log.info(`Restoring file ${filePath} to snapshot: ${snapshotId.slice(0, 8)}`);
+    set({ isRestoring: true });
+    try {
+      const result = await invoke<SnapshotInfo>("history_restore_file", {
+        projectRoot,
+        snapshotId,
+        filePath,
+      });
+      log.info(`Restored file, new snapshot: ${result.id.slice(0, 8)}`);
       set((s) => ({ snapshots: [result, ...s.snapshots] }));
       return result;
     } finally {

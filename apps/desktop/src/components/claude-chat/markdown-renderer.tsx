@@ -243,16 +243,23 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
 /**
  * Extract attrs from hast node properties (set via hProperties from remark-rehype)
  */
-function extractAttrsFromNode(
-  node: unknown,
-): { width?: string; height?: string; align?: "left" | "center" | "right" } {
+function extractAttrsFromNode(node: unknown): {
+  width?: string;
+  height?: string;
+  align?: "left" | "center" | "right";
+} {
   // Try hast node properties first (from hProperties)
-  const properties = (node as { properties?: Record<string, string> })?.properties;
+  const properties = (node as { properties?: Record<string, string> })
+    ?.properties;
   if (properties) {
     return {
       width: properties["data-width"],
       height: properties["data-height"],
-      align: properties["data-align"] as "left" | "center" | "right" | undefined,
+      align: properties["data-align"] as
+        | "left"
+        | "center"
+        | "right"
+        | undefined,
     };
   }
   // Fallback to mdast node data (direct access, for backwards compatibility)

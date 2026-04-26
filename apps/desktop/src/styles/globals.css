@@ -120,8 +120,11 @@
   * {
     @apply border-border outline-ring/50;
   }
-  html {
+  html, body, #root {
     @apply overscroll-y-none scroll-smooth;
+    height: 100%;
+  }
+  html {
     /* macOS overlay titlebar inset — traffic lights safe area */
     --titlebar-height: 18px;
     --traffic-light-width: 70px;
@@ -209,4 +212,37 @@
 
 .prose a:hover {
   opacity: 0.8;
+}
+
+/* Prevent SVG and wide content from overflowing */
+.prose svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.prose pre,
+.prose code {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Constrain all prose content to prevent overflow */
+.prose {
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+.prose * {
+  max-width: 100%;
+}
+
+.prose pre {
+  max-width: 100%;
+  overflow-x: auto;
 }

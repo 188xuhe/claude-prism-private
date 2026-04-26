@@ -12,6 +12,7 @@ import {
   QuoteIcon,
   FileTextIcon,
   ExternalLinkIcon,
+  GitBranchIcon,
 } from "lucide-react";
 import { TooltipIconButton } from "@/components/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/ui/button";
@@ -115,6 +116,68 @@ export function MarkdownToolbar({ editorView }: MarkdownToolbarProps) {
     view.focus();
   };
 
+  const insertMermaidDiagram = (diagramType: string) => {
+    const view = editorView.current;
+    if (!view) return;
+
+    const templates: Record<string, string> = {
+      flowchart: `flowchart TB
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]`,
+      sequence: `sequenceDiagram
+    participant A as Alice
+    participant B as Bob
+    A->>B: Hello!
+    B-->>A: Hi!`,
+      class: `classDiagram
+    class Animal {
+        +String name
+        +makeSound()
+    }
+    class Dog {
+        +bark()
+    }
+    Animal <|-- Dog`,
+      state: `stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing: Start
+    Processing --> Done: Complete
+    Done --> [*]`,
+      er: `erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT ||--o{ LINE_ITEM : "is in"`,
+      gantt: `gantt
+    title Project Timeline
+    dateFormat YYYY-MM-DD
+    section Planning
+    Research :a1, 2024-01-01, 7d
+    Design :a2, after a1, 5d`,
+      pie: `pie showData
+    title Distribution
+    "Category A" : 45
+    "Category B" : 30
+    "Category C" : 25`,
+    };
+
+    const template = templates[diagramType] || templates.flowchart;
+    const { from } = view.state.selection.main;
+    const insertText = `\n\`\`\`mermaid\n${template}\n\`\`\`\n`;
+
+    view.dispatch({
+      changes: {
+        from,
+        to: from,
+        insert: insertText,
+      },
+      selection: {
+        anchor: from + insertText.length,
+      },
+    });
+    view.focus();
+  };
+
   return (
     <div className="flex h-[calc(36px+var(--titlebar-height))] items-center gap-1 border-border border-b bg-muted/30 px-2 pt-[var(--titlebar-height)]">
       <FileTextIcon className="size-4 text-muted-foreground" />
@@ -172,6 +235,42 @@ export function MarkdownToolbar({ editorView }: MarkdownToolbarProps) {
       >
         <LinkIcon className="size-4" />
       </TooltipIconButton>
+      <div className="mx-2 h-4 w-px bg-border" />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-6 p-1"
+            title="Insert Mermaid Diagram"
+          >
+            <GitBranchIcon className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("flowchart")}>
+            Flowchart
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("sequence")}>
+            Sequence Diagram
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("class")}>
+            Class Diagram
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("state")}>
+            State Diagram
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("er")}>
+            ER Diagram
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("gantt")}>
+            Gantt Chart
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => insertMermaidDiagram("pie")}>
+            Pie Chart
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <div data-tauri-drag-region className="flex-1 self-stretch" />
       {editors.length === 1 && (
         <TooltipIconButton

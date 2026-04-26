@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
@@ -428,7 +434,8 @@ export function MarkdownEditor({ previewScrollRef }: MarkdownEditorProps) {
         // Calculate editor scroll progress
         const scrollDOM = view.scrollDOM;
         const scrollHeight = scrollDOM.scrollHeight - scrollDOM.clientHeight;
-        const progress = scrollHeight > 0 ? scrollDOM.scrollTop / scrollHeight : 0;
+        const progress =
+          scrollHeight > 0 ? scrollDOM.scrollTop / scrollHeight : 0;
 
         // Directly set preview scroll position (key: no React update)
         if (previewScrollRef?.current) {
