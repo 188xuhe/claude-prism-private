@@ -1,14 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import {
-  LoaderIcon,
-  AlertCircleIcon,
-  FileTextIcon,
-  DownloadIcon,
-  HistoryIcon,
-} from "lucide-react";
-import { save } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
-import { exportElementToPdf } from "@/lib/pdf-export";
+import { useEffect, useRef } from "react";
+import { FileTextIcon, HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -41,6 +32,7 @@ export function MarkdownPreview() {
   const contentGeneration = useDocumentStore((s) => s.contentGeneration);
   const scrollToHeading = useDocumentStore((s) => s.scrollToHeading);
   const clearScrollToHeading = useDocumentStore((s) => s.clearScrollToHeading);
+  const editorScrollLine = useDocumentStore((s) => s.editorScrollLine);
 
   // Get content from the active file - contentGeneration in dependency ensures updates
   const activeFileContent = activeFile?.content ?? "";
@@ -81,60 +73,34 @@ export function MarkdownPreview() {
     clearScrollToHeading();
   }, [scrollToHeading, clearScrollToHeading]);
 
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
-
-  const handleExport = useCallback(async () => {
-    if (!activeFile || !previewContainerRef.current) return;
-
-    setIsExporting(true);
-    setExportError(null);
-
-    try {
-      log.info("Starting PDF export", { file: activeFile.name });
-
-      // Get the content container (the scrollable div with rendered markdown)
-      const contentContainer = previewContainerRef.current.querySelector(
-        ".prose",
-      ) as HTMLElement;
-      if (!contentContainer) {
-        throw new Error("Could not find content container");
-      }
-
-      // Ask user where to save
-      const defaultName = activeFile.name.replace(/\.md$/i, ".pdf");
-      const savePath = await save({
-        defaultPath: defaultName,
-        filters: [{ name: "PDF", extensions: ["pdf"] }],
-      });
-
-      if (!savePath) {
-        setIsExporting(false);
-        return;
-      }
-
-      // Export the rendered content to PDF and get bytes
-      const pdfBytes = await exportElementToPdf(contentContainer, {
-        title: activeFile.name,
-      });
-
-      // Save PDF bytes to user-selected path using Tauri fs
-      await writeFile(savePath, pdfBytes);
-
-      log.info("PDF exported successfully", { path: savePath });
-      setIsExporting(false);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      setExportError(message);
-      log.error("PDF export failed", { error: message });
-      setIsExporting(false);
-    }
-  }, [activeFile]);
-
-  // Clear error when file changes
+  // Sync preview scroll with editor scroll position
   useEffect(() => {
-    setExportError(null);
-  }, [activeFile?.id]);
+    if (!editorScrollLine || !previewContainerRef.current) return;
+
+    const container = previewContainerRef.current;
+    const scrollableArea = container.querySelector(
+      ".overflow-auto",
+    ) as HTMLElement;
+    if (!scrollableArea) return;
+
+    // Find the element at or near the editor's current line
+    // Strategy: find closest element with data-source-line <= editorScrollLine
+    const elements = container.querySelectorAll("[data-source-line]");
+    let targetEl: Element | null = null;
+
+    for (const el of elements) {
+      const elLine = parseInt(el.getAttribute("data-source-line") || "0", 10);
+      if (elLine <= editorScrollLine) {
+        targetEl = el;
+      } else {
+        break; // Found first element beyond current line
+      }
+    }
+
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: "instant", block: "start" });
+    }
+  }, [editorScrollLine]);
 
   return (
     <div className="flex h-full flex-col bg-muted/50">
@@ -148,30 +114,6 @@ export function MarkdownPreview() {
         </div>
         <div data-tauri-drag-region className="min-w-4 flex-1 self-stretch" />
         <div className="flex shrink-0 items-center gap-2">
-          {activeFile?.type === "md" && (
-            <>
-              {!isExporting && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1.5 px-2.5 text-xs"
-                  onClick={handleExport}
-                  title="Export to PDF"
-                >
-                  <DownloadIcon className="size-3.5" />
-                  Export PDF
-                </Button>
-              )}
-              {isExporting && (
-                <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1">
-                  <LoaderIcon className="size-3.5 animate-spin text-muted-foreground" />
-                  <span className="font-medium text-muted-foreground text-xs">
-                    Exporting...
-                  </span>
-                </div>
-              )}
-            </>
-          )}
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -194,16 +136,6 @@ export function MarkdownPreview() {
           </Popover>
         </div>
       </div>
-
-      {/* Error banner */}
-      {exportError && activeFile?.type === "md" && (
-        <div className="shrink-0 border-border border-b bg-destructive/10 px-4 py-2">
-          <div className="flex items-center gap-2">
-            <AlertCircleIcon className="size-4 text-destructive" />
-            <span className="text-destructive text-sm">{exportError}</span>
-          </div>
-        </div>
-      )}
 
       {/* Preview content */}
       <div
