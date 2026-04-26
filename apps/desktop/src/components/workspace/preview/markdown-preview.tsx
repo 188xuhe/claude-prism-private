@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { FileTextIcon, HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,12 @@ function slugifyHeading(title: string): string {
     .trim();
 }
 
-export function MarkdownPreview() {
+interface MarkdownPreviewProps {
+  /** Ref to the scroll container for direct DOM manipulation from editor */
+  scrollContainerRef?: RefObject<HTMLDivElement | null>;
+}
+
+export function MarkdownPreview({ scrollContainerRef }: MarkdownPreviewProps) {
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const activeFileId = useDocumentStore((s) => s.activeFileId);
   const files = useDocumentStore((s) => s.files);
@@ -33,7 +38,6 @@ export function MarkdownPreview() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const scrollToHeading = useDocumentStore((s) => s.scrollToHeading);
   const clearScrollToHeading = useDocumentStore((s) => s.clearScrollToHeading);
-  const editorScrollProgress = useDocumentStore((s) => s.editorScrollProgress);
 
   // Get content from the active file - contentGeneration in dependency ensures updates
   const activeFileContent = activeFile?.content ?? "";
@@ -73,28 +77,6 @@ export function MarkdownPreview() {
 
     clearScrollToHeading();
   }, [scrollToHeading, clearScrollToHeading]);
-
-  // Proportional scroll sync - no DOM queries, just math
-  // Sync preview scroll position based on editor's scroll progress (0-1)
-  useEffect(() => {
-    if (editorScrollProgress === null || !previewContainerRef.current) return;
-
-    const container = previewContainerRef.current;
-    const scrollableArea = container.querySelector(
-      ".overflow-auto",
-    ) as HTMLElement;
-    if (!scrollableArea) return;
-
-    // Direct scrollTop calculation - no DOM element search needed
-    const scrollHeight =
-      scrollableArea.scrollHeight - scrollableArea.clientHeight;
-    const targetScrollTop = editorScrollProgress * scrollHeight;
-
-    // Only scroll if difference is significant (avoid micro-scroll jitter)
-    if (Math.abs(scrollableArea.scrollTop - targetScrollTop) > 5) {
-      scrollableArea.scrollTop = targetScrollTop;
-    }
-  }, [editorScrollProgress]);
 
   return (
     <div className="flex h-full flex-col bg-muted/50">
@@ -136,7 +118,15 @@ export function MarkdownPreview() {
         ref={previewContainerRef}
         className="min-h-0 flex-1 overflow-hidden p-4"
       >
-        <div className="h-full overflow-auto">
+        {/* Scroll container - ref exposed to parent for direct DOM manipulation */}
+        <div
+          ref={(el) => {
+            if (scrollContainerRef && el) {
+              scrollContainerRef.current = el;
+            }
+          }}
+          className="h-full overflow-auto"
+        >
           {activeFile?.type === "md" && activeFileContent ? (
             <MarkdownRenderer
               content={activeFileContent}

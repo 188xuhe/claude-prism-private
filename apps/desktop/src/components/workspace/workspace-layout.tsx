@@ -8,7 +8,10 @@ import { ImagePreviewWrapper } from "./preview/image-preview-wrapper";
 import { useDocumentStore } from "@/stores/document-store";
 import { BugIcon, ImageIcon } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createLogger } from "@/lib/debug/logger";
+
+const log = createLogger("workspace-layout");
 
 export function WorkspaceLayout() {
   const initialized = useDocumentStore((s) => s.initialized);
@@ -18,6 +21,19 @@ export function WorkspaceLayout() {
   const isMarkdown = activeFile?.type === "md";
   const isImage = activeFile?.type === "image";
   const [devtoolsOpen, setDevtoolsOpen] = useState(false);
+
+  // Shared ref for markdown scroll sync (direct DOM manipulation, no React)
+  const markdownPreviewScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Debug logging
+  useEffect(() => {
+    log.info("WorkspaceLayout file routing", {
+      activeFileType: activeFile?.type,
+      activeFileName: activeFile?.name,
+      isMarkdown,
+      isImage,
+    });
+  }, [activeFile, isMarkdown, isImage]);
 
   const handleToggleDevtools = async () => {
     try {
@@ -48,12 +64,12 @@ export function WorkspaceLayout() {
         {isImage ? (
           <div className="flex h-full items-center justify-center bg-muted/50">
             <div className="text-center text-muted-foreground">
-              <ImageIcon className="mb-2 size-8 mx-auto" />
+              <ImageIcon className="mx-auto mb-2 size-8" />
               <p className="text-sm">Image preview on the right</p>
             </div>
           </div>
         ) : isMarkdown ? (
-          <MarkdownEditor />
+          <MarkdownEditor previewScrollRef={markdownPreviewScrollRef} />
         ) : (
           <LatexEditor />
         )}
@@ -65,7 +81,7 @@ export function WorkspaceLayout() {
         {isImage ? (
           <ImagePreviewWrapper />
         ) : isMarkdown ? (
-          <MarkdownPreview />
+          <MarkdownPreview scrollContainerRef={markdownPreviewScrollRef} />
         ) : (
           <PdfPreview />
         )}
@@ -75,7 +91,7 @@ export function WorkspaceLayout() {
       {import.meta.env.DEV && (
         <button
           onClick={handleToggleDevtools}
-          className={`fixed bottom-4 right-4 z-50 flex size-10 items-center justify-center rounded-full shadow-lg transition-colors ${
+          className={`fixed right-4 bottom-4 z-50 flex size-10 items-center justify-center rounded-full shadow-lg transition-colors ${
             devtoolsOpen
               ? "bg-primary text-primary-foreground"
               : "bg-muted text-muted-foreground hover:bg-muted/80"

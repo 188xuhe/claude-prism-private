@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
 import {
   EditorView,
@@ -64,7 +64,12 @@ export function clearMdEditorStateCache(): void {
   editorStateCache.clear();
 }
 
-export function MarkdownEditor() {
+interface MarkdownEditorProps {
+  /** Ref to the preview scroll container for direct DOM manipulation */
+  previewScrollRef?: RefObject<HTMLDivElement | null>;
+}
+
+export function MarkdownEditor({ previewScrollRef }: MarkdownEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
@@ -76,9 +81,6 @@ export function MarkdownEditor() {
   const setSelectionRange = useDocumentStore((s) => s.setSelectionRange);
   const jumpToPosition = useDocumentStore((s) => s.jumpToPosition);
   const clearJumpRequest = useDocumentStore((s) => s.clearJumpRequest);
-  const setEditorScrollProgress = useDocumentStore(
-    (s) => s.setEditorScrollProgress,
-  );
 
   // History review state
   const reviewingSnapshot = useHistoryStore((s) => s.reviewingSnapshot);
@@ -414,7 +416,7 @@ export function MarkdownEditor() {
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
-    // Scroll sync: update store with scroll progress (0-1), throttled with RAF
+    // Scroll sync: directly manipulate preview DOM (no React re-render)
     let rafId: number | null = null;
     const handleScroll = () => {
       if (rafId !== null) return; // Already pending
@@ -422,12 +424,22 @@ export function MarkdownEditor() {
         rafId = null;
         const view = viewRef.current;
         if (!view) return;
+
+        // Calculate editor scroll progress
         const scrollDOM = view.scrollDOM;
-        const scrollTop = scrollDOM.scrollTop;
         const scrollHeight = scrollDOM.scrollHeight - scrollDOM.clientHeight;
-        // Calculate scroll progress (0-1), avoid NaN when scrollHeight is 0
-        const progress = scrollHeight > 0 ? scrollTop / scrollHeight : 0;
-        setEditorScrollProgress(progress);
+        const progress = scrollHeight > 0 ? scrollDOM.scrollTop / scrollHeight : 0;
+
+        // Directly set preview scroll position (key: no React update)
+        if (previewScrollRef?.current) {
+          const previewEl = previewScrollRef.current;
+          const previewHeight = previewEl.scrollHeight - previewEl.clientHeight;
+          const targetScrollTop = progress * previewHeight;
+          // Only scroll if difference > 5px to avoid jitter
+          if (Math.abs(previewEl.scrollTop - targetScrollTop) > 5) {
+            previewEl.scrollTop = targetScrollTop;
+          }
+        }
       });
     };
 
@@ -464,7 +476,7 @@ export function MarkdownEditor() {
     setContent,
     setCursorPosition,
     setSelectionRange,
-    setEditorScrollProgress,
+    previewScrollRef,
   ]);
 
   // Dynamically switch editor theme
