@@ -30,18 +30,12 @@ import {
   findPrevious,
 } from "@codemirror/search";
 import { forEachDiagnostic } from "@codemirror/lint";
-import {
-  RotateCcwIcon,
-  TagIcon,
-  CopyIcon,
-  XIcon,
-} from "lucide-react";
+import { RotateCcwIcon, TagIcon, CopyIcon, XIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { useHistoryStore } from "@/stores/history-store";
 import { MarkdownToolbar } from "./markdown-toolbar";
 import { SearchPanel } from "./search-panel";
 import { ProblemsPanel, type DiagnosticItem } from "./problems-panel";
-import { ImagePreview } from "./image-preview";
 import { HistoryDiffView } from "./history-diff-view";
 import { ClaudeChatDrawer } from "@/components/claude-chat/claude-chat-drawer";
 import { Button } from "@/components/ui/button";
@@ -172,7 +166,6 @@ export function MarkdownEditor() {
     }
   }, [isTextFile, isContentLoaded, handleImagePaste]);
 
-  const [imageScale, setImageScale] = useState(1.0);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
@@ -185,11 +178,6 @@ export function MarkdownEditor() {
   useEffect(() => {
     isSearchOpenRef.current = isSearchOpen;
   }, [isSearchOpen]);
-
-  // Reset scale when switching files
-  useEffect(() => {
-    setImageScale(1.0);
-  }, [activeFileId]);
 
   useEffect(() => {
     if (!searchQuery || !activeFileContent) {
@@ -540,12 +528,11 @@ export function MarkdownEditor() {
   }, []);
 
   const isPdf = activeFile?.type === "pdf";
-  const isImage = !isTextFile && !isPdf && !!activeFile;
 
   return (
     <div className="flex h-full flex-col bg-background">
       <MarkdownToolbar editorView={viewRef} />
-      {!isPdf && !isImage && !isLargeFileNotLoaded && isSearchOpen && (
+      {!isPdf && !isLargeFileNotLoaded && isSearchOpen && (
         <SearchPanel
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
@@ -561,7 +548,7 @@ export function MarkdownEditor() {
         />
       )}
       {/* History review banner */}
-      {!isPdf && !isImage && !isLargeFileNotLoaded && reviewingSnapshot && (
+      {!isPdf && !isLargeFileNotLoaded && reviewingSnapshot && (
         <div className="flex h-9 shrink-0 items-center justify-between border-border border-b bg-amber-500/10 px-3">
           <div className="flex items-center gap-2 text-xs">
             <RotateCcwIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
@@ -642,7 +629,7 @@ export function MarkdownEditor() {
           </div>
         )}
         {/* Text editor content */}
-        {!isPdf && !isImage && !isLargeFileNotLoaded && isContentLoaded && (
+        {!isPdf && !isLargeFileNotLoaded && isContentLoaded && (
           <>
             <div
               ref={containerRef}
@@ -654,27 +641,16 @@ export function MarkdownEditor() {
           </>
         )}
         {/* Loading state for text files */}
-        {!isPdf && !isImage && !isLargeFileNotLoaded && !isContentLoaded && (
+        {!isPdf && !isLargeFileNotLoaded && !isContentLoaded && (
           <div className="flex flex-1 items-center justify-center">
             <div className="text-muted-foreground text-sm">Loading...</div>
           </div>
-        )}
-        {/* Image content */}
-        {isImage && activeFile && (
-          <ImagePreview
-            file={activeFile}
-            scale={imageScale}
-            onScaleChange={setImageScale}
-            cropMode={false}
-            onCropModeChange={() => {}}
-          />
         )}
         {/* Chat drawer */}
         <ClaudeChatDrawer />
       </div>
       {/* Problems panel */}
       {!isPdf &&
-        !isImage &&
         !isLargeFileNotLoaded &&
         diagnostics.length > 0 && (
           <ProblemsPanel
