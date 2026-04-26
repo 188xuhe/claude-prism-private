@@ -16,17 +16,17 @@ export interface AttrNodeData {
  * Remark plugin to parse `{ width=300 align=center }` attribute blocks.
  *
  * For images: attributes follow the image in a text node
- * For code blocks: attributes are in the lang field after language name
+ * For code blocks: attributes are in the meta field (after lang)
  */
 export const remarkAttrParser: Plugin<[], Root> = () => {
   const transformer: Transformer<Root> = (tree) => {
     visit(tree, (node, index, parent) => {
-      // Handle code blocks with attributes in lang field
-      if (node.type === "code" && node.lang) {
-        const result = parseCodeLang(node.lang);
+      // Handle code blocks with attributes in meta field
+      if (node.type === "code" && node.meta) {
+        const result = parseCodeMeta(node.meta);
         if (result.attrs) {
           (node.data as AttrNodeData | undefined) = { attrs: result.attrs };
-          node.lang = result.lang;
+          node.meta = result.remaining;
         }
       }
 
@@ -53,18 +53,22 @@ export const remarkAttrParser: Plugin<[], Root> = () => {
 };
 
 /**
- * Parse code block lang field: "mermaid { width=500 }"
- * Returns: { lang: "mermaid", attrs: { width: "500" } }
+ * Parse code block meta field: "{ width=500 }"
+ * Returns: { attrs: { width: "500" }, remaining: "" }
  */
-function parseCodeLang(langField: string): { lang: string; attrs?: Attrs } {
-  const match = langField.match(/^(\w+)\s*\{([^}]*)\}$/);
+function parseCodeMeta(metaField: string): { attrs?: Attrs; remaining: string } {
+  const match = metaField.match(/^\s*\{([^}]*)\}\s*/);
   if (!match) {
-    return { lang: langField };
+    return { remaining: metaField };
   }
-  const lang = match[1];
-  const attrString = match[2];
+  const attrString = match[1];
   const attrs = parseAttrs(attrString);
-  return { lang, attrs };
+  const remaining = metaField.slice(match[0].length);
+  // Only return attrs if there are valid attributes
+  if (Object.keys(attrs).length === 0) {
+    return { remaining: metaField };
+  }
+  return { attrs, remaining };
 }
 
 /**
@@ -79,6 +83,10 @@ function parseAttrBlock(text: string): { attrs?: Attrs; remaining: string } {
   const attrString = match[1];
   const attrs = parseAttrs(attrString);
   const remaining = text.slice(match[0].length);
+  // Only return attrs if there are valid attributes
+  if (Object.keys(attrs).length === 0) {
+    return { remaining: text };
+  }
   return { attrs, remaining };
 }
 
