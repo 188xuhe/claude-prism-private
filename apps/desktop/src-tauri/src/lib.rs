@@ -3,7 +3,6 @@ mod history;
 mod latex;
 mod license;
 mod markdown;
-mod pdf_export;
 mod skills;
 mod slash_commands;
 mod uv;
@@ -393,7 +392,6 @@ pub fn run() {
             latex::compile_latex,
             latex::synctex_edit,
             latex::detect_texlive,
-            pdf_export::export_markdown_to_pdf,
             claude::check_claude_status,
             claude::install_claude_cli,
             claude::login_claude,
