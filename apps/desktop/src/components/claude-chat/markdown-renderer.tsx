@@ -101,7 +101,9 @@ function computeStylesFromAttrs(attrs?: Attrs): {
 
   // Width
   if (attrs.width) {
-    const widthValue = attrs.width.endsWith("%") ? attrs.width : `${attrs.width}px`;
+    const widthValue = attrs.width.endsWith("%")
+      ? attrs.width
+      : `${attrs.width}px`;
     containerStyle.width = widthValue;
     imgStyle.width = widthValue;
   }
@@ -137,9 +139,12 @@ function computeStylesFromAttrs(attrs?: Attrs): {
 
 // ─── Mermaid Block ───
 
-const MermaidBlock: FC<{ code: string }> = ({ code }) => {
+const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Compute styles from attrs
+  const { containerStyle } = computeStylesFromAttrs(attrs);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -230,6 +235,7 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
     <div
       ref={containerRef}
       className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg bg-muted/50 p-4"
+      style={containerStyle}
     />
   );
 };
@@ -249,14 +255,18 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
 }) => {
   return (
     <ReactMarkdown
-      key={projectRoot ? `with-root-${projectRoot}` : 'no-root'}
+      key={projectRoot ? `with-root-${projectRoot}` : "no-root"}
       remarkPlugins={[remarkAttrParser, remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       className={className ?? "prose prose-sm dark:prose-invert max-w-none"}
       components={{
         // Handle relative image paths - convert to Tauri asset URLs
         img({ src, alt }) {
-          console.log("[MarkdownRenderer] img handler called", { src, projectRoot, hasProjectRoot: !!projectRoot });
+          console.log("[MarkdownRenderer] img handler called", {
+            src,
+            projectRoot,
+            hasProjectRoot: !!projectRoot,
+          });
 
           // Skip external URLs and data URLs
           if (
@@ -271,7 +281,9 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
           // For relative paths, we need projectRoot to convert to Tauri asset URL
           // If projectRoot is not available yet, show a placeholder
           if (!projectRoot) {
-            console.log("[MarkdownRenderer] projectRoot is null, showing placeholder");
+            console.log(
+              "[MarkdownRenderer] projectRoot is null, showing placeholder",
+            );
             return (
               <span className="inline-block rounded bg-muted px-2 py-1 text-muted-foreground text-sm">
                 [Image loading...]
@@ -285,7 +297,10 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             ? normalizedSrc
             : `${projectRoot}/${normalizedSrc}`;
           const assetUrl = convertFileSrc(absolutePath);
-          console.log("[MarkdownRenderer] converted to assetUrl", { absolutePath, assetUrl });
+          console.log("[MarkdownRenderer] converted to assetUrl", {
+            absolutePath,
+            assetUrl,
+          });
           return <img src={assetUrl} alt={alt} />;
         },
         pre({ children }) {
