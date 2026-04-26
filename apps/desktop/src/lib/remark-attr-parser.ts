@@ -10,6 +10,22 @@ export interface Attrs {
 
 export interface AttrNodeData {
   attrs?: Attrs;
+  hProperties?: {
+    "data-width"?: string;
+    "data-height"?: string;
+    "data-align"?: string;
+  };
+}
+
+/**
+ * Convert Attrs to hProperties for remark-rehype transfer
+ */
+function attrsToHProperties(attrs: Attrs): AttrNodeData["hProperties"] {
+  const props: AttrNodeData["hProperties"] = {};
+  if (attrs.width) props["data-width"] = attrs.width;
+  if (attrs.height) props["data-height"] = attrs.height;
+  if (attrs.align) props["data-align"] = attrs.align;
+  return props;
 }
 
 /**
@@ -25,7 +41,11 @@ export const remarkAttrParser: Plugin<[], Root> = () => {
       if (node.type === "code" && node.meta) {
         const result = parseCodeMeta(node.meta);
         if (result.attrs) {
-          (node.data as AttrNodeData | undefined) = { attrs: result.attrs };
+          const hProps = attrsToHProperties(result.attrs);
+          (node.data as AttrNodeData | undefined) = {
+            attrs: result.attrs,
+            hProperties: hProps,
+          };
           node.meta = result.remaining;
         }
       }
@@ -36,7 +56,11 @@ export const remarkAttrParser: Plugin<[], Root> = () => {
         if (nextNode?.type === "text") {
           const result = parseAttrBlock(nextNode.value);
           if (result.attrs) {
-            (node.data as AttrNodeData | undefined) = { attrs: result.attrs };
+            const hProps = attrsToHProperties(result.attrs);
+            (node.data as AttrNodeData | undefined) = {
+              attrs: result.attrs,
+              hProperties: hProps,
+            };
             // Remove the attribute block text
             if (result.remaining === "") {
               parent.children.splice(index + 1, 1);
@@ -56,7 +80,10 @@ export const remarkAttrParser: Plugin<[], Root> = () => {
  * Parse code block meta field: "{ width=500 }"
  * Returns: { attrs: { width: "500" }, remaining: "" }
  */
-function parseCodeMeta(metaField: string): { attrs?: Attrs; remaining: string } {
+function parseCodeMeta(metaField: string): {
+  attrs?: Attrs;
+  remaining: string;
+} {
   const match = metaField.match(/^\s*\{([^}]*)\}\s*/);
   if (!match) {
     return { remaining: metaField };

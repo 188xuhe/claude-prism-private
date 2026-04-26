@@ -240,7 +240,25 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
   );
 };
 
-// ─── Markdown Renderer ───
+/**
+ * Extract attrs from hast node properties (set via hProperties from remark-rehype)
+ */
+function extractAttrsFromNode(
+  node: unknown,
+): { width?: string; height?: string; align?: "left" | "center" | "right" } {
+  // Try hast node properties first (from hProperties)
+  const properties = (node as { properties?: Record<string, string> })?.properties;
+  if (properties) {
+    return {
+      width: properties["data-width"],
+      height: properties["data-height"],
+      align: properties["data-align"] as "left" | "center" | "right" | undefined,
+    };
+  }
+  // Fallback to mdast node data (direct access, for backwards compatibility)
+  const attrs = (node as { data?: { attrs?: Attrs } })?.data?.attrs;
+  return attrs ?? {};
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -266,10 +284,11 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             src,
             projectRoot,
             hasProjectRoot: !!projectRoot,
+            nodeProperties: node?.properties,
           });
 
-          // Extract attrs from node data (set by remarkAttrParser)
-          const attrs = (node?.data as { attrs?: Attrs })?.attrs;
+          // Extract attrs from node properties (set by remarkAttrParser via hProperties)
+          const attrs = extractAttrsFromNode(node);
           const { imgStyle } = computeStylesFromAttrs(attrs);
 
           // Skip external URLs and data URLs
@@ -318,8 +337,13 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             node?.position &&
             node.position.start.line !== node.position.end.line;
 
-          // Extract attrs from node data (set by remarkAttrParser)
-          const attrs = (node?.data as { attrs?: Attrs })?.attrs;
+          // Extract attrs from node properties (set by remarkAttrParser via hProperties)
+          const attrs = extractAttrsFromNode(node);
+          console.log("[MarkdownRenderer] code handler called", {
+            language,
+            nodeProperties: node?.properties,
+            attrs,
+          });
 
           if (!match && !isBlock) {
             return (
