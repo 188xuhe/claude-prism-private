@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from "react";
+import { useEffect, useRef } from "react";
 import { FileTextIcon, HistoryIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +33,7 @@ export function MarkdownPreview() {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const scrollToHeading = useDocumentStore((s) => s.scrollToHeading);
   const clearScrollToHeading = useDocumentStore((s) => s.clearScrollToHeading);
-  const editorScrollLine = useDocumentStore((s) => s.editorScrollLine);
+  const editorScrollProgress = useDocumentStore((s) => s.editorScrollProgress);
 
   // Get content from the active file - contentGeneration in dependency ensures updates
   const activeFileContent = activeFile?.content ?? "";
@@ -74,30 +74,10 @@ export function MarkdownPreview() {
     clearScrollToHeading();
   }, [scrollToHeading, clearScrollToHeading]);
 
-  // Cache elements with source lines for efficient scroll sync
-  const lineElementsCacheRef = useRef<Array<{ el: Element; line: number }>>([]);
-  const lastContentGenerationRef = useRef<number>(0);
-
-  // Update cache when content changes
+  // Proportional scroll sync - no DOM queries, just math
+  // Sync preview scroll position based on editor's scroll progress (0-1)
   useEffect(() => {
-    if (!previewContainerRef.current) return;
-    if (lastContentGenerationRef.current === contentGeneration) return;
-
-    lastContentGenerationRef.current = contentGeneration;
-    const container = previewContainerRef.current;
-    const elements = container.querySelectorAll("[data-source-line]");
-    lineElementsCacheRef.current = Array.from(elements).map((el) => ({
-      el,
-      line: parseInt(el.getAttribute("data-source-line") || "0", 10),
-    }));
-    log.info("Line elements cache rebuilt", {
-      count: lineElementsCacheRef.current.length,
-    });
-  }, [contentGeneration]);
-
-  // Sync preview scroll with editor scroll position (RAF throttled, binary search)
-  useEffect(() => {
-    if (!editorScrollLine || !previewContainerRef.current) return;
+    if (editorScrollProgress === null || !previewContainerRef.current) return;
 
     const container = previewContainerRef.current;
     const scrollableArea = container.querySelector(
@@ -105,34 +85,16 @@ export function MarkdownPreview() {
     ) as HTMLElement;
     if (!scrollableArea) return;
 
-    // Use RAF to throttle scroll updates
-    requestAnimationFrame(() => {
-      const cache = lineElementsCacheRef.current;
-      if (cache.length === 0) return;
+    // Direct scrollTop calculation - no DOM element search needed
+    const scrollHeight =
+      scrollableArea.scrollHeight - scrollableArea.clientHeight;
+    const targetScrollTop = editorScrollProgress * scrollHeight;
 
-      // Binary search for the closest element with line <= editorScrollLine
-      let left = 0;
-      let right = cache.length - 1;
-      let targetIdx = -1;
-
-      while (left <= right) {
-        const mid = Math.floor((left + right) / 2);
-        if (cache[mid].line <= editorScrollLine) {
-          targetIdx = mid;
-          left = mid + 1;
-        } else {
-          right = mid - 1;
-        }
-      }
-
-      if (targetIdx >= 0) {
-        cache[targetIdx].el.scrollIntoView({
-          behavior: "instant",
-          block: "start",
-        });
-      }
-    });
-  }, [editorScrollLine]);
+    // Only scroll if difference is significant (avoid micro-scroll jitter)
+    if (Math.abs(scrollableArea.scrollTop - targetScrollTop) > 5) {
+      scrollableArea.scrollTop = targetScrollTop;
+    }
+  }, [editorScrollProgress]);
 
   return (
     <div className="flex h-full flex-col bg-muted/50">

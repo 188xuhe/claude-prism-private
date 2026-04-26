@@ -76,7 +76,9 @@ export function MarkdownEditor() {
   const setSelectionRange = useDocumentStore((s) => s.setSelectionRange);
   const jumpToPosition = useDocumentStore((s) => s.jumpToPosition);
   const clearJumpRequest = useDocumentStore((s) => s.clearJumpRequest);
-  const setEditorScrollLine = useDocumentStore((s) => s.setEditorScrollLine);
+  const setEditorScrollProgress = useDocumentStore(
+    (s) => s.setEditorScrollProgress,
+  );
 
   // History review state
   const reviewingSnapshot = useHistoryStore((s) => s.reviewingSnapshot);
@@ -412,7 +414,7 @@ export function MarkdownEditor() {
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
-    // Scroll sync: update store with current first visible line (throttled with RAF)
+    // Scroll sync: update store with scroll progress (0-1), throttled with RAF
     let rafId: number | null = null;
     const handleScroll = () => {
       if (rafId !== null) return; // Already pending
@@ -420,11 +422,12 @@ export function MarkdownEditor() {
         rafId = null;
         const view = viewRef.current;
         if (!view) return;
-        const scrollTop = view.scrollDOM.scrollTop;
-        // Get the line block at the scroll position
-        const block = view.lineBlockAtHeight(scrollTop);
-        const line = view.state.doc.lineAt(block.from).number;
-        setEditorScrollLine(line);
+        const scrollDOM = view.scrollDOM;
+        const scrollTop = scrollDOM.scrollTop;
+        const scrollHeight = scrollDOM.scrollHeight - scrollDOM.clientHeight;
+        // Calculate scroll progress (0-1), avoid NaN when scrollHeight is 0
+        const progress = scrollHeight > 0 ? scrollTop / scrollHeight : 0;
+        setEditorScrollProgress(progress);
       });
     };
 
@@ -461,7 +464,7 @@ export function MarkdownEditor() {
     setContent,
     setCursorPosition,
     setSelectionRange,
-    setEditorScrollLine,
+    setEditorScrollProgress,
   ]);
 
   // Dynamically switch editor theme

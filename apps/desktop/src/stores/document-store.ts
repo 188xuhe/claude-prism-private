@@ -77,8 +77,8 @@ interface DocumentState {
   jumpToPosition: number | null;
   /** Heading to scroll to in preview (triggered by Outline click). */
   scrollToHeading: { title: string; line: number } | null;
-  /** Current first visible line in editor (for scroll sync to preview). */
-  editorScrollLine: number | null;
+  /** Editor scroll progress (0-1) for proportional sync to preview. */
+  editorScrollProgress: number | null;
   isThreadOpen: boolean;
   /** Bumped whenever PDF bytes change — triggers re-render without storing bytes in state. */
   pdfRevision: number;
@@ -110,7 +110,7 @@ interface DocumentState {
   clearJumpRequest: () => void;
   requestScrollToHeading: (heading: { title: string; line: number }) => void;
   clearScrollToHeading: () => void;
-  setEditorScrollLine: (line: number) => void;
+  setEditorScrollProgress: (progress: number) => void;
   setThreadOpen: (open: boolean) => void;
   setPdfData: (data: Uint8Array | null, rootFileId?: string) => void;
   setCompileError: (error: string | null, rootFileId?: string) => void;
@@ -262,7 +262,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
   selectionRange: null,
   jumpToPosition: null,
   scrollToHeading: null,
-  editorScrollLine: null,
+  editorScrollProgress: null,
   isThreadOpen: false,
   pdfRevision: 0,
   compileError: null,
@@ -410,7 +410,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
 
   clearScrollToHeading: () => set({ scrollToHeading: null }),
 
-  setEditorScrollLine: (line) => set({ editorScrollLine: line }),
+  setEditorScrollProgress: (progress) => set({ editorScrollProgress: progress }),
 
   addFile: (file) => {
     const id = file.relativePath;
