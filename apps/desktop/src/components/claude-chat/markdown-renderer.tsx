@@ -261,12 +261,16 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
       className={className ?? "prose prose-sm dark:prose-invert max-w-none"}
       components={{
         // Handle relative image paths - convert to Tauri asset URLs
-        img({ src, alt }) {
+        img({ src, alt, node }) {
           console.log("[MarkdownRenderer] img handler called", {
             src,
             projectRoot,
             hasProjectRoot: !!projectRoot,
           });
+
+          // Extract attrs from node data (set by remarkAttrParser)
+          const attrs = (node?.data as { attrs?: Attrs })?.attrs;
+          const { imgStyle } = computeStylesFromAttrs(attrs);
 
           // Skip external URLs and data URLs
           if (
@@ -275,7 +279,7 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             src.startsWith("https://") ||
             src.startsWith("data:")
           ) {
-            return <img src={src} alt={alt} />;
+            return <img src={src} alt={alt} style={imgStyle} />;
           }
 
           // For relative paths, we need projectRoot to convert to Tauri asset URL
@@ -301,7 +305,7 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             absolutePath,
             assetUrl,
           });
-          return <img src={assetUrl} alt={alt} />;
+          return <img src={assetUrl} alt={alt} style={imgStyle} />;
         },
         pre({ children }) {
           return <>{children}</>;
