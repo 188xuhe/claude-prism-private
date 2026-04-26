@@ -30,11 +30,29 @@ import {
   findPrevious,
 } from "@codemirror/search";
 import { forEachDiagnostic } from "@codemirror/lint";
+import {
+  RotateCcwIcon,
+  TagIcon,
+  CopyIcon,
+  XIcon,
+} from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
+import { useHistoryStore } from "@/stores/history-store";
 import { MarkdownToolbar } from "./markdown-toolbar";
 import { SearchPanel } from "./search-panel";
 import { ProblemsPanel, type DiagnosticItem } from "./problems-panel";
 import { ImagePreview } from "./image-preview";
+import { HistoryDiffView } from "./history-diff-view";
+import { ClaudeChatDrawer } from "@/components/claude-chat/claude-chat-drawer";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { mkdir, writeFile } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { createLogger } from "@/lib/debug/logger";
@@ -64,6 +82,11 @@ export function MarkdownEditor() {
   const setSelectionRange = useDocumentStore((s) => s.setSelectionRange);
   const jumpToPosition = useDocumentStore((s) => s.jumpToPosition);
   const clearJumpRequest = useDocumentStore((s) => s.clearJumpRequest);
+  const setEditorScrollLine = useDocumentStore((s) => s.setEditorScrollLine);
+
+  // History review state
+  const reviewingSnapshot = useHistoryStore((s) => s.reviewingSnapshot);
+  const historyDiffResult = useHistoryStore((s) => s.diffResult);
 
   const activeFile = files.find((f) => f.id === activeFileId);
   const isTextFile = activeFile?.type === "md";
@@ -75,46 +98,51 @@ export function MarkdownEditor() {
   const refreshFiles = useDocumentStore((s) => s.refreshFiles);
 
   // Handle image paste - save to assets/images and insert markdown link
-  const handleImagePaste = useCallback(async (file: File): Promise<boolean> => {
-    if (!projectRoot || !viewRef.current) return false;
+  const handleImagePaste = useCallback(
+    async (file: File): Promise<boolean> => {
+      if (!projectRoot || !viewRef.current) return false;
 
-    try {
-      // Create assets/images directory if not exists
-      const assetsDir = await join(projectRoot, "assets", "images");
-      await mkdir(assetsDir, { recursive: true });
+      try {
+        // Create assets/images directory if not exists
+        const assetsDir = await join(projectRoot, "assets", "images");
+        await mkdir(assetsDir, { recursive: true });
 
-      // Generate unique filename
-      const timestamp = Date.now();
-      const ext = file.name.split(".").pop() || "png";
-      const fileName = `image-${timestamp}.${ext}`;
-      const filePath = await join(assetsDir, fileName);
+        // Generate unique filename
+        const timestamp = Date.now();
+        const ext = file.name.split(".").pop() || "png";
+        const fileName = `image-${timestamp}.${ext}`;
+        const filePath = await join(assetsDir, fileName);
 
-      // Read file content and save
-      const arrayBuffer = await file.arrayBuffer();
-      await writeFile(filePath, new Uint8Array(arrayBuffer));
+        // Read file content and save
+        const arrayBuffer = await file.arrayBuffer();
+        await writeFile(filePath, new Uint8Array(arrayBuffer));
 
-      log.info("Image saved", { path: filePath });
+        log.info("Image saved", { path: filePath });
 
-      // Insert markdown image syntax at cursor position
-      const view = viewRef.current;
-      const { from } = view.state.selection.main;
-      const relativePath = `assets/images/${fileName}`;
-      const imageMarkdown = `![${file.name.replace(/\.[^.]+$/, "")}](${relativePath})`;
+        // Insert markdown image syntax at cursor position
+        const view = viewRef.current;
+        const { from } = view.state.selection.main;
+        const relativePath = `assets/images/${fileName}`;
+        const imageMarkdown = `![${file.name.replace(/\.[^.]+$/, "")}](${relativePath})`;
 
-      view.dispatch({
-        changes: { from, to: from, insert: imageMarkdown },
-        selection: { anchor: from + imageMarkdown.length },
-      });
+        view.dispatch({
+          changes: { from, to: from, insert: imageMarkdown },
+          selection: { anchor: from + imageMarkdown.length },
+        });
 
-      // Refresh file tree to show new image
-      refreshFiles().catch((err) => log.error("Failed to refresh files", { error: String(err) }));
+        // Refresh file tree to show new image
+        refreshFiles().catch((err) =>
+          log.error("Failed to refresh files", { error: String(err) }),
+        );
 
-      return true;
-    } catch (err) {
-      log.error("Failed to save pasted image", { error: String(err) });
-      return false;
-    }
-  }, [projectRoot, refreshFiles]);
+        return true;
+      } catch (err) {
+        log.error("Failed to save pasted image", { error: String(err) });
+        return false;
+      }
+    },
+    [projectRoot, refreshFiles],
+  );
 
   // Paste event handler for images
   useEffect(() => {
@@ -396,6 +424,19 @@ export function MarkdownEditor() {
     const view = new EditorView({ state, parent: containerRef.current });
     viewRef.current = view;
 
+    // Scroll sync: update store with current first visible line
+    const handleScroll = () => {
+      const view = viewRef.current;
+      if (!view) return;
+      const scrollTop = view.scrollDOM.scrollTop;
+      // Get the line block at the scroll position
+      const block = view.lineBlockAtHeight(scrollTop);
+      const line = view.state.doc.lineAt(block.from).number;
+      setEditorScrollLine(line);
+    };
+
+    view.scrollDOM.addEventListener("scroll", handleScroll);
+
     // Restore per-file cursor + scroll from cache
     const cached = editorStateCache.get(activeFileId);
     if (cached) {
@@ -412,6 +453,8 @@ export function MarkdownEditor() {
         cursor: view.state.selection.main.head,
         scrollTop: view.scrollDOM.scrollTop,
       });
+      // Clean up scroll listener
+      view.scrollDOM.removeEventListener("scroll", handleScroll);
       view.destroy();
       viewRef.current = null;
     };
@@ -422,6 +465,7 @@ export function MarkdownEditor() {
     setContent,
     setCursorPosition,
     setSelectionRange,
+    setEditorScrollLine,
   ]);
 
   // Dynamically switch editor theme
@@ -462,6 +506,39 @@ export function MarkdownEditor() {
     clearJumpRequest();
   }, [jumpToPosition, clearJumpRequest]);
 
+  // History review action handlers
+  const handleHistoryRestore = useCallback(async () => {
+    if (!reviewingSnapshot || !projectRoot) return;
+    useHistoryStore.getState().stopReview();
+    await useHistoryStore
+      .getState()
+      .restoreSnapshot(projectRoot, reviewingSnapshot.id);
+    await useDocumentStore.getState().openProject(projectRoot);
+    await useHistoryStore.getState().loadSnapshots(projectRoot);
+  }, [reviewingSnapshot, projectRoot]);
+
+  const [historyLabelDialogOpen, setHistoryLabelDialogOpen] = useState(false);
+  const [historyLabelValue, setHistoryLabelValue] = useState("");
+
+  const handleHistoryAddLabel = useCallback(async () => {
+    const label = historyLabelValue.trim();
+    if (!label || !reviewingSnapshot || !projectRoot) return;
+    await useHistoryStore
+      .getState()
+      .addLabel(projectRoot, reviewingSnapshot.id, label);
+    setHistoryLabelDialogOpen(false);
+    setHistoryLabelValue("");
+  }, [reviewingSnapshot, projectRoot, historyLabelValue]);
+
+  const handleHistoryCopySha = useCallback(() => {
+    if (!reviewingSnapshot) return;
+    navigator.clipboard.writeText(reviewingSnapshot.id);
+  }, [reviewingSnapshot]);
+
+  const handleHistoryClose = useCallback(() => {
+    useHistoryStore.getState().stopReview();
+  }, []);
+
   const isPdf = activeFile?.type === "pdf";
   const isImage = !isTextFile && !isPdf && !!activeFile;
 
@@ -483,49 +560,118 @@ export function MarkdownEditor() {
           currentMatch={currentMatch}
         />
       )}
-      {/* Large file warning */}
-      {isLargeFileNotLoaded && activeFile && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
-          <div className="max-w-md rounded-lg border border-border bg-card/50 p-6 shadow-sm">
-            <p className="mb-1 font-medium text-foreground text-sm">
-              {activeFile.name}
-            </p>
-            <p className="mb-4 text-muted-foreground text-xs">
-              This file is large (
-              {activeFile.fileSize != null
-                ? `${(activeFile.fileSize / (1024 * 1024)).toFixed(1)} MB`
-                : "unknown size"}
-              ). Opening it may slow down the editor.
-            </p>
-            <button
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted"
-              onClick={() => loadFileContent(activeFile.id)}
+      {/* History review banner */}
+      {!isPdf && !isImage && !isLargeFileNotLoaded && reviewingSnapshot && (
+        <div className="flex h-9 shrink-0 items-center justify-between border-border border-b bg-amber-500/10 px-3">
+          <div className="flex items-center gap-2 text-xs">
+            <RotateCcwIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
+            <span className="font-medium text-amber-700 dark:text-amber-300">
+              Reviewing history
+            </span>
+            <span className="text-muted-foreground">
+              {reviewingSnapshot.message.replace(/^\[.*?\]\s*/, "")} &middot;{" "}
+              {reviewingSnapshot.id.slice(0, 7)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs"
+              onClick={handleHistoryRestore}
             >
-              Open Anyway
-            </button>
+              <RotateCcwIcon className="size-3" />
+              Restore
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs"
+              onClick={() => {
+                setHistoryLabelDialogOpen(true);
+                setHistoryLabelValue("");
+              }}
+            >
+              <TagIcon className="size-3" />
+              Label
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 gap-1 px-2 text-xs"
+              onClick={handleHistoryCopySha}
+            >
+              <CopyIcon className="size-3" />
+              SHA
+            </Button>
+            <div className="mx-0.5 h-4 w-px bg-border" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={handleHistoryClose}
+            >
+              <XIcon className="size-3.5" />
+            </Button>
           </div>
         </div>
       )}
-      {/* Text editor content */}
-      {!isPdf && !isImage && !isLargeFileNotLoaded && isContentLoaded && (
-        <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
-      )}
-      {/* Loading state for text files */}
-      {!isPdf && !isImage && !isLargeFileNotLoaded && !isContentLoaded && (
-        <div className="flex flex-1 items-center justify-center">
-          <div className="text-muted-foreground text-sm">Loading...</div>
-        </div>
-      )}
-      {/* Image content */}
-      {isImage && activeFile && (
-        <ImagePreview
-          file={activeFile}
-          scale={imageScale}
-          onScaleChange={setImageScale}
-          cropMode={false}
-          onCropModeChange={() => {}}
-        />
-      )}
+      {/* Main content area — wrapper for stable ClaudeChatDrawer */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* Large file warning */}
+        {isLargeFileNotLoaded && activeFile && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="max-w-md rounded-lg border border-border bg-card/50 p-6 shadow-sm">
+              <p className="mb-1 font-medium text-foreground text-sm">
+                {activeFile.name}
+              </p>
+              <p className="mb-4 text-muted-foreground text-xs">
+                This file is large (
+                {activeFile.fileSize != null
+                  ? `${(activeFile.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                  : "unknown size"}
+                ). Opening it may slow down the editor.
+              </p>
+              <button
+                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm transition-colors hover:bg-muted"
+                onClick={() => loadFileContent(activeFile.id)}
+              >
+                Open Anyway
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Text editor content */}
+        {!isPdf && !isImage && !isLargeFileNotLoaded && isContentLoaded && (
+          <>
+            <div
+              ref={containerRef}
+              className={reviewingSnapshot ? "hidden" : "absolute inset-0"}
+            />
+            {reviewingSnapshot && historyDiffResult && (
+              <HistoryDiffView diffs={historyDiffResult} />
+            )}
+          </>
+        )}
+        {/* Loading state for text files */}
+        {!isPdf && !isImage && !isLargeFileNotLoaded && !isContentLoaded && (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="text-muted-foreground text-sm">Loading...</div>
+          </div>
+        )}
+        {/* Image content */}
+        {isImage && activeFile && (
+          <ImagePreview
+            file={activeFile}
+            scale={imageScale}
+            onScaleChange={setImageScale}
+            cropMode={false}
+            onCropModeChange={() => {}}
+          />
+        )}
+        {/* Chat drawer */}
+        <ClaudeChatDrawer />
+      </div>
       {/* Problems panel */}
       {!isPdf &&
         !isImage &&
@@ -547,6 +693,42 @@ export function MarkdownEditor() {
             onFixAllWithChat={() => {}}
           />
         )}
+      {/* History label dialog */}
+      <Dialog
+        open={historyLabelDialogOpen}
+        onOpenChange={setHistoryLabelDialogOpen}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Label</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Input
+              placeholder="e.g. Draft v1"
+              value={historyLabelValue}
+              onChange={(e) => setHistoryLabelValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleHistoryAddLabel();
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setHistoryLabelDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleHistoryAddLabel}
+              disabled={!historyLabelValue.trim()}
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
