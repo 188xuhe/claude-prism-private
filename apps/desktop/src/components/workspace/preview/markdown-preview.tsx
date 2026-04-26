@@ -30,6 +30,7 @@ export function MarkdownPreview() {
   const activeFile = files.find((f) => f.id === activeFileId);
   // Subscribe to contentGeneration to force re-renders when content changes
   const contentGeneration = useDocumentStore((s) => s.contentGeneration);
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
   const scrollToHeading = useDocumentStore((s) => s.scrollToHeading);
   const clearScrollToHeading = useDocumentStore((s) => s.clearScrollToHeading);
   const editorScrollLine = useDocumentStore((s) => s.editorScrollLine);
@@ -147,6 +148,7 @@ export function MarkdownPreview() {
             <MarkdownRenderer
               content={activeFileContent}
               className="prose prose-sm dark:prose-invert max-w-none"
+              projectRoot={projectRoot}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center">

@@ -183,13 +183,14 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  projectRoot?: string | null;
 }
 
 export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
   content,
   className,
+  projectRoot,
 }) => {
-  const projectRoot = useDocumentStore((s) => s.projectRoot);
 
   return (
     <ReactMarkdown
@@ -200,24 +201,39 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
         // Handle relative image paths - convert to Tauri asset URLs
         img({ src, alt }) {
           // Skip external URLs and data URLs
-          if (!src || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+          if (
+            !src ||
+            src.startsWith("http://") ||
+            src.startsWith("https://") ||
+            src.startsWith("data:")
+          ) {
+            console.log("[MarkdownRenderer] img: external/data URL", { src });
             return <img src={src} alt={alt} />;
           }
 
           // For relative paths, convert to Tauri asset URL
-          // Note: We need async join, so we use a fallback approach
-          // React components can't be async, so we handle this differently
-          // Try to construct the URL directly if we have projectRoot
+          console.log("[MarkdownRenderer] img: relative path", {
+            src,
+            projectRoot,
+          });
+
+          // Try to construct the asset URL directly if we have projectRoot
           if (projectRoot) {
-            // Construct the asset URL directly without async join
-            const absolutePath = src.startsWith("/")
-              ? src
-              : `${projectRoot}/${src}`;
+            // Handle both forward and backward slashes
+            const normalizedSrc = src.replace(/\\/g, "/");
+            const absolutePath = normalizedSrc.startsWith("/")
+              ? normalizedSrc
+              : `${projectRoot}/${normalizedSrc}`;
             const assetUrl = convertFileSrc(absolutePath);
+            console.log("[MarkdownRenderer] img: converted", {
+              absolutePath,
+              assetUrl,
+            });
             return <img src={assetUrl} alt={alt} />;
           }
 
           // Fallback: just use the original src
+          console.log("[MarkdownRenderer] img: no projectRoot, fallback");
           return <img src={src} alt={alt} />;
         },
         pre({ children }) {
