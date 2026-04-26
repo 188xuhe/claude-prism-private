@@ -180,7 +180,9 @@ export const useHistoryStore = create<HistoryState>()((set, get) => ({
   },
 
   restoreFile: async (projectRoot, snapshotId, filePath) => {
-    log.info(`Restoring file ${filePath} to snapshot: ${snapshotId.slice(0, 8)}`);
+    log.info(
+      `Restoring file ${filePath} to snapshot: ${snapshotId.slice(0, 8)}`,
+    );
     set({ isRestoring: true });
     try {
       const result = await invoke<SnapshotInfo>("history_restore_file", {

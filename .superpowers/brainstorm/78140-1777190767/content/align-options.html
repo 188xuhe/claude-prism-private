@@ -1,0 +1,59 @@
+<h2>图片对齐选项</h2>
+<p class="subtitle">您希望支持哪些对齐方式？</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">偏左对齐</div>
+    <div class="mockup-body" style="padding: 16px; text-align: left;">
+      <div style="width: 150px; height: 100px; background: linear-gradient(135deg, #89b4fa, #74c7ec); border-radius: 8px;"></div>
+      <p style="margin-top: 12px; color: #6c7086; font-size: 12px;">图片靠左，文字在右侧流动</p>
+    </div>
+    <code style="display: block; padding: 8px; background: #1e1e2e; color: #a6e3a1; font-size: 12px; border-radius: 4px; margin-top: 8px;">{ width=150 align=left }</code>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">居中对齐</div>
+    <div class="mockup-body" style="padding: 16px; text-align: center;">
+      <div style="width: 150px; height: 100px; background: linear-gradient(135deg, #f9e2af, #fab387); border-radius: 8px; margin: 0 auto;"></div>
+      <p style="margin-top: 12px; color: #6c7086; font-size: 12px;">图片居中显示</p>
+    </div>
+    <code style="display: block; padding: 8px; background: #1e1e2e; color: #a6e3a1; font-size: 12px; border-radius: 4px; margin-top: 8px;">{ width=150 align=center }</code>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">偏右对齐</div>
+    <div class="mockup-body" style="padding: 16px; text-align: right;">
+      <div style="width: 150px; height: 100px; background: linear-gradient(135deg, #a6e3a1, #94e2d5); border-radius: 8px; margin-left: auto;"></div>
+      <p style="margin-top: 12px; color: #6c7086; font-size: 12px;">图片靠右，文字在左侧流动</p>
+    </div>
+    <code style="display: block; padding: 8px; background: #1e1e2e; color: #a6e3a1; font-size: 12px; border-radius: 4px; margin-top: 8px;">{ width=150 align=right }</code>
+  </div>
+</div>
+
+<div class="options" data-multiselect style="margin-top: 24px;">
+  <div class="option" data-choice="align-left" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>支持偏左</h3>
+      <p>图片靠左对齐</p>
+    </div>
+  </div>
+  <div class="option" data-choice="align-center" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>支持居中</h3>
+      <p>图片居中显示</p>
+    </div>
+  </div>
+  <div class="option" data-choice="align-right" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>支持偏右</h3>
+      <p>图片靠右对齐</p>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: #6c7086; font-size: 14px;">
+  可多选。选择后在终端告诉我。
+</p>

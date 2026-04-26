@@ -102,3 +102,4 @@ external-libs/
 # License key generator (never push to GitHub)
 generate_license.py
 scripts/
+docs/

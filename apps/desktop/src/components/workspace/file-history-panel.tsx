@@ -71,7 +71,10 @@ interface FileHistoryPanelProps {
   maxHeight?: string;
 }
 
-export function FileHistoryPanel({ filePath, maxHeight }: FileHistoryPanelProps) {
+export function FileHistoryPanel({
+  filePath,
+  maxHeight,
+}: FileHistoryPanelProps) {
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const snapshots = useHistoryStore((s) => s.snapshots);
   const isLoading = useHistoryStore((s) => s.isLoading);

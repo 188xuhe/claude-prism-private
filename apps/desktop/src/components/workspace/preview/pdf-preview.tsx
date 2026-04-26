@@ -39,7 +39,7 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { HistoryPanel } from "@/components/workspace/history-panel";
+import { FileHistoryPanel } from "@/components/workspace/file-history-panel";
 import {
   compileLatex,
   synctexEdit,
@@ -1004,7 +1004,12 @@ export function PdfPreview() {
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-96">
-              <HistoryPanel maxHeight="max-h-[32rem]" />
+              {activeFile?.relativePath && (
+                <FileHistoryPanel
+                  filePath={activeFile.relativePath}
+                  maxHeight="max-h-[32rem]"
+                />
+              )}
             </PopoverContent>
           </Popover>
         </div>

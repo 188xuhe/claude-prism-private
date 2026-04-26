@@ -1,12 +1,12 @@
-import { useState } from "react";
-import {
-  MinusIcon,
-  PlusIcon,
-  FileTextIcon,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { MinusIcon, PlusIcon, FileTextIcon } from "lucide-react";
 import { useDocumentStore } from "@/stores/document-store";
 import { ImagePreview } from "@/components/workspace/editor/image-preview";
 import { Button } from "@/components/ui/button";
+import { readFile } from "@tauri-apps/plugin-fs";
+import { createLogger } from "@/lib/debug/logger";
+
+const log = createLogger("image-preview-wrapper");
 
 export function ImagePreviewWrapper() {
   const activeFileId = useDocumentStore((s) => s.activeFileId);
@@ -14,6 +14,62 @@ export function ImagePreviewWrapper() {
   const activeFile = files.find((f) => f.id === activeFileId);
 
   const [scale, setScale] = useState(1.0);
+  const [loadingDataUrl, setLoadingDataUrl] = useState<string | null>(null);
+
+  // Load image dataUrl for large images that weren't pre-loaded
+  useEffect(() => {
+    if (!activeFile || activeFile.type !== "image") {
+      setLoadingDataUrl(null);
+      return;
+    }
+
+    // If already has dataUrl, use it
+    if (activeFile.dataUrl) {
+      setLoadingDataUrl(null);
+      return;
+    }
+
+    // Load image content dynamically for large images
+    const loadImage = async () => {
+      try {
+        log.info("Loading large image dynamically", { path: activeFile.absolutePath });
+        const bytes = await readFile(activeFile.absolutePath);
+        const ext = activeFile.name.split(".").pop()?.toLowerCase() || "png";
+        const mimeMap: Record<string, string> = {
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          bmp: "image/bmp",
+        };
+        const mime = mimeMap[ext] || "image/png";
+        const base64 = btoa(
+          bytes.reduce((data, byte) => data + String.fromCharCode(byte), ""),
+        );
+        const dataUrl = `data:${mime};base64,${base64}`;
+        setLoadingDataUrl(dataUrl);
+        log.info("Large image loaded", { size: bytes.length });
+      } catch (err) {
+        log.error("Failed to load large image", { error: String(err) });
+        setLoadingDataUrl(null);
+      }
+    };
+
+    loadImage();
+  }, [activeFile]);
+
+  // Debug logging
+  useEffect(() => {
+    log.info("ImagePreviewWrapper state", {
+      activeFileId,
+      activeFileType: activeFile?.type,
+      activeFileName: activeFile?.name,
+      hasDataUrl: !!activeFile?.dataUrl,
+      hasAbsolutePath: !!activeFile?.absolutePath,
+      hasLoadingDataUrl: !!loadingDataUrl,
+    });
+  }, [activeFileId, activeFile, loadingDataUrl]);
 
   if (!activeFile || activeFile.type !== "image") {
     return (
@@ -69,13 +125,27 @@ export function ImagePreviewWrapper() {
 
       {/* Image content */}
       <div className="min-h-0 flex-1">
-        <ImagePreview
-          file={activeFile}
-          scale={scale}
-          onScaleChange={setScale}
-          cropMode={false}
-          onCropModeChange={() => {}}
-        />
+        {loadingDataUrl ? (
+          <ImagePreview
+            file={{ ...activeFile, dataUrl: loadingDataUrl }}
+            scale={scale}
+            onScaleChange={setScale}
+            cropMode={false}
+            onCropModeChange={() => {}}
+          />
+        ) : activeFile?.dataUrl ? (
+          <ImagePreview
+            file={activeFile}
+            scale={scale}
+            onScaleChange={setScale}
+            cropMode={false}
+            onCropModeChange={() => {}}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <div className="text-muted-foreground text-sm">Loading image...</div>
+          </div>
+        )}
       </div>
     </div>
   );

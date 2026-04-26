@@ -347,6 +347,10 @@ export function ImagePreview({
 
   // Use dataUrl if available (in-memory), otherwise fall back to asset URL (large images)
   const imageSrc = file.dataUrl || getAssetUrl(file.absolutePath);
+
+  // Debug logging
+  console.log("[ImagePreview] imageSrc:", imageSrc, "dataUrl:", !!file.dataUrl, "absolutePath:", file.absolutePath);
+
   // Crop requires dataUrl (canvas manipulation needs same-origin data)
   const _canCrop = !!file.dataUrl;
 

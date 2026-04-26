@@ -1,0 +1,62 @@
+<h2>尺寸控制选项</h2>
+<p class="subtitle">您希望支持哪些尺寸属性？</p>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="width-px" onclick="toggleSelect(this)">
+    <div class="letter">1</div>
+    <div class="content">
+      <h3>固定宽度 (像素)</h3>
+      <p>精确控制元素宽度</p>
+      <code style="color: #a6e3a1; font-size: 12px;">{ width=300 }</code>
+    </div>
+  </div>
+
+  <div class="option" data-choice="width-percent" onclick="toggleSelect(this)">
+    <div class="letter">2</div>
+    <div class="content">
+      <h3>百分比宽度</h3>
+      <p>相对容器宽度的比例</p>
+      <code style="color: #a6e3a1; font-size: 12px;">{ width=50% }</code>
+    </div>
+  </div>
+
+  <div class="option" data-choice="height" onclick="toggleSelect(this)">
+    <div class="letter">3</div>
+    <div class="content">
+      <h3>高度控制</h3>
+      <p>控制图片/图表的高度</p>
+      <code style="color: #a6e3a1; font-size: 12px;">{ height=200 }</code>
+    </div>
+  </div>
+
+  <div class="option" data-choice="max-width" onclick="toggleSelect(this)">
+    <div class="letter">4</div>
+    <div class="content">
+      <h3>最大宽度限制</h3>
+      <p>限制元素的最大宽度</p>
+      <code style="color: #a6e3a1; font-size: 12px;">{ max-width=600 }</code>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top: 24px; padding: 16px; background: #1e1e2e; border-radius: 8px;">
+  <h3 style="color: #cdd6f4; margin-bottom: 8px;">示例效果预览</h3>
+  <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+    <div style="width: 150px; padding: 12px; background: #313244; border-radius: 6px; text-align: center;">
+      <div style="background: #89b4fa; height: 80px; border-radius: 4px; margin-bottom: 8px;"></div>
+      <span style="color: #a6adc8; font-size: 11px;">width=150</span>
+    </div>
+    <div style="width: 50%; padding: 12px; background: #313244; border-radius: 6px; text-align: center;">
+      <div style="background: #f9e2af; height: 80px; border-radius: 4px; margin-bottom: 8px;"></div>
+      <span style="color: #a6adc8; font-size: 11px;">width=50%</span>
+    </div>
+    <div style="width: 100%; max-width: 250px; padding: 12px; background: #313244; border-radius: 6px; text-align: center;">
+      <div style="background: #a6e3a1; height: 80px; border-radius: 4px; margin-bottom: 8px;"></div>
+      <span style="color: #a6adc8; font-size: 11px;">max-width=250</span>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 16px; color: #6c7086; font-size: 14px;">
+  可以多选。选择后在终端告诉我您的决定。
+</p>

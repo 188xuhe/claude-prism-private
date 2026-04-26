@@ -446,6 +446,71 @@ pub fn history_file_at(
 }
 
 #[tauri::command]
+pub fn history_restore_file(
+    project_root: String,
+    snapshot_id: String,
+    file_path: String,
+) -> Result<SnapshotInfo, String> {
+    let repo = open_repo(&project_root)?;
+    let oid = Oid::from_str(&snapshot_id).map_err(|e| format!("Invalid snapshot_id: {}", e))?;
+    let commit = repo
+        .find_commit(oid)
+        .map_err(|e| format!("Commit not found: {}", e))?;
+    let tree = commit.tree().map_err(|e| format!("Tree error: {}", e))?;
+
+    // Get the file content from the snapshot
+    let entry = tree
+        .get_path(Path::new(&file_path))
+        .map_err(|e| format!("File not found in snapshot: {}", e))?;
+    let blob = repo
+        .find_blob(entry.id())
+        .map_err(|e| format!("Blob error: {}", e))?;
+
+    // Write the file content to disk
+    let full_path = PathBuf::from(&project_root).join(&file_path);
+    if let Some(parent) = full_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
+    }
+    fs::write(&full_path, blob.content()).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    // Create a new commit with just this file restored
+    let mut index = repo.index().map_err(|e| format!("Index error: {}", e))?;
+    index
+        .add_path(Path::new(&file_path))
+        .map_err(|e| format!("Add error: {}", e))?;
+    index.write().map_err(|e| format!("Write error: {}", e))?;
+
+    let new_tree_oid = index
+        .write_tree()
+        .map_err(|e| format!("Write tree error: {}", e))?;
+    let new_tree = repo
+        .find_tree(new_tree_oid)
+        .map_err(|e| format!("Find tree error: {}", e))?;
+
+    let sig = default_signature()?;
+    let head_commit = repo.head().ok().and_then(|h| h.peel_to_commit().ok());
+    let parents: Vec<&git2::Commit> = head_commit.iter().collect();
+
+    let short_id = &snapshot_id[..8.min(snapshot_id.len())];
+    let file_name = Path::new(&file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(&file_path);
+    let msg = format!("[restore] Restored {} to {}", file_name, short_id);
+    let new_oid = repo
+        .commit(Some("HEAD"), &sig, &sig, &msg, &new_tree, &parents)
+        .map_err(|e| format!("Commit error: {}", e))?;
+
+    Ok(SnapshotInfo {
+        id: new_oid.to_string(),
+        message: msg,
+        timestamp: chrono::Utc::now().timestamp(),
+        labels: vec![],
+        changed_files: vec![file_path],
+    })
+}
+
+#[tauri::command]
 pub fn history_restore(project_root: String, snapshot_id: String) -> Result<SnapshotInfo, String> {
     let repo = open_repo(&project_root)?;
     let oid = Oid::from_str(&snapshot_id).map_err(|e| format!("Invalid snapshot_id: {}", e))?;

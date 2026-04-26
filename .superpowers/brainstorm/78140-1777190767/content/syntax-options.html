@@ -1,0 +1,65 @@
+<h2>Markdown 语法方案选择</h2>
+<p class="subtitle">您希望用什么方式来控制图表和图片的尺寸与位置？</p>
+
+<div class="options">
+  <div class="option" data-choice="html-attr" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>HTML 属性语法</h3>
+      <p>类似 Pandoc/Obsidian 的语法</p>
+      <div class="mockup" style="margin-top: 12px; background: #1e1e2e; padding: 12px; border-radius: 8px;">
+        <code style="color: #a6e3a1; font-size: 13px;">
+          ![图片](path.jpg){ width=300 align=center }<br><br>
+          ```mermaid { width=500 }<br>
+          graph LR<br>
+            A --> B<br>
+          ```
+        </code>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="comment-directive" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>注释指令语法</h3>
+      <p>通过特殊注释行控制</p>
+      <div class="mockup" style="margin-top: 12px; background: #1e1e2e; padding: 12px; border-radius: 8px;">
+        <code style="color: #a6e3a1; font-size: 13px;">
+          ![图片](path.jpg)<br>
+          <!-- image: width=300, align=center --><br><br>
+          <!-- mermaid: width=500 --><br>
+          ```mermaid<br>
+          graph LR<br>
+            A --> B<br>
+          ```
+        </code>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="wrapper-div" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>HTML 包裹语法</h3>
+      <p>使用 div 标签包裹并设置样式</p>
+      <div class="mockup" style="margin-top: 12px; background: #1e1e2e; padding: 12px; border-radius: 8px;">
+        <code style="color: #a6e3a1; font-size: 13px;">
+          &lt;div style="width:300px; margin:auto"&gt;<br>
+            ![图片](path.jpg)<br>
+          &lt;/div&gt;<br><br>
+          &lt;div style="width:500px"&gt;<br>
+            ```mermaid<br>
+            graph LR<br>
+              A --> B<br>
+            ```<br>
+          &lt;/div&gt;
+        </code>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 20px; color: #6c7086; font-size: 14px;">
+  点击选择您偏好的方案，然后在终端中告诉我您的想法。
+</p>
