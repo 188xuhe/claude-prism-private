@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
+import remarkAttrParser, { type Attrs } from "@/lib/remark-attr-parser";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
 import {
@@ -77,6 +78,61 @@ function isShellCodeBlock(language: string, code: string): boolean {
   if (SHELL_LANGUAGES.has(language.toLowerCase())) return true;
   if (!language && looksLikeShellCommand(code)) return true;
   return false;
+}
+
+// ─── Style Helpers ───
+
+/**
+ * Compute CSS styles from parsed attributes
+ */
+function computeStylesFromAttrs(attrs?: Attrs): {
+  containerStyle: React.CSSProperties;
+  imgStyle: React.CSSProperties;
+} {
+  const containerStyle: React.CSSProperties = {};
+  const imgStyle: React.CSSProperties = { display: "block" };
+
+  if (!attrs) {
+    // Default: full width, centered
+    containerStyle.width = "100%";
+    containerStyle.margin = "0 auto";
+    return { containerStyle, imgStyle };
+  }
+
+  // Width
+  if (attrs.width) {
+    const widthValue = attrs.width.endsWith("%") ? attrs.width : `${attrs.width}px`;
+    containerStyle.width = widthValue;
+    imgStyle.width = widthValue;
+  }
+
+  // Height (only for images)
+  if (attrs.height) {
+    imgStyle.height = `${attrs.height}px`;
+  }
+
+  // Alignment
+  switch (attrs.align) {
+    case "left":
+      containerStyle.marginLeft = "0";
+      containerStyle.marginRight = "auto";
+      imgStyle.marginLeft = "0";
+      imgStyle.marginRight = "auto";
+      break;
+    case "right":
+      containerStyle.marginLeft = "auto";
+      containerStyle.marginRight = "0";
+      imgStyle.marginLeft = "auto";
+      imgStyle.marginRight = "0";
+      break;
+    case "center":
+    default:
+      containerStyle.margin = "0 auto";
+      imgStyle.margin = "0 auto";
+      break;
+  }
+
+  return { containerStyle, imgStyle };
 }
 
 // ─── Mermaid Block ───
@@ -191,15 +247,17 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
   className,
   projectRoot,
 }) => {
-
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      key={projectRoot ? `with-root-${projectRoot}` : 'no-root'}
+      remarkPlugins={[remarkAttrParser, remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       className={className ?? "prose prose-sm dark:prose-invert max-w-none"}
       components={{
         // Handle relative image paths - convert to Tauri asset URLs
         img({ src, alt }) {
+          console.log("[MarkdownRenderer] img handler called", { src, projectRoot, hasProjectRoot: !!projectRoot });
+
           // Skip external URLs and data URLs
           if (
             !src ||
@@ -207,34 +265,28 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             src.startsWith("https://") ||
             src.startsWith("data:")
           ) {
-            console.log("[MarkdownRenderer] img: external/data URL", { src });
             return <img src={src} alt={alt} />;
           }
 
-          // For relative paths, convert to Tauri asset URL
-          console.log("[MarkdownRenderer] img: relative path", {
-            src,
-            projectRoot,
-          });
-
-          // Try to construct the asset URL directly if we have projectRoot
-          if (projectRoot) {
-            // Handle both forward and backward slashes
-            const normalizedSrc = src.replace(/\\/g, "/");
-            const absolutePath = normalizedSrc.startsWith("/")
-              ? normalizedSrc
-              : `${projectRoot}/${normalizedSrc}`;
-            const assetUrl = convertFileSrc(absolutePath);
-            console.log("[MarkdownRenderer] img: converted", {
-              absolutePath,
-              assetUrl,
-            });
-            return <img src={assetUrl} alt={alt} />;
+          // For relative paths, we need projectRoot to convert to Tauri asset URL
+          // If projectRoot is not available yet, show a placeholder
+          if (!projectRoot) {
+            console.log("[MarkdownRenderer] projectRoot is null, showing placeholder");
+            return (
+              <span className="inline-block rounded bg-muted px-2 py-1 text-muted-foreground text-sm">
+                [Image loading...]
+              </span>
+            );
           }
 
-          // Fallback: just use the original src
-          console.log("[MarkdownRenderer] img: no projectRoot, fallback");
-          return <img src={src} alt={alt} />;
+          // Convert relative path to Tauri asset URL
+          const normalizedSrc = src.replace(/\\/g, "/");
+          const absolutePath = normalizedSrc.startsWith("/")
+            ? normalizedSrc
+            : `${projectRoot}/${normalizedSrc}`;
+          const assetUrl = convertFileSrc(absolutePath);
+          console.log("[MarkdownRenderer] converted to assetUrl", { absolutePath, assetUrl });
+          return <img src={assetUrl} alt={alt} />;
         },
         pre({ children }) {
           return <>{children}</>;
