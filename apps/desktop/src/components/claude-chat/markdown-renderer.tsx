@@ -314,6 +314,9 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
             node?.position &&
             node.position.start.line !== node.position.end.line;
 
+          // Extract attrs from node data (set by remarkAttrParser)
+          const attrs = (node?.data as { attrs?: Attrs })?.attrs;
+
           if (!match && !isBlock) {
             return (
               <code className={codeClassName} {...props}>
@@ -324,7 +327,7 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
 
           // Handle mermaid diagrams
           if (language === "mermaid") {
-            return <MermaidBlock code={code} />;
+            return <MermaidBlock code={code} attrs={attrs} />;
           }
 
           return <CodeBlock language={language || ""} code={code} />;
