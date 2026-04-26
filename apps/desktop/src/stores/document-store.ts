@@ -75,6 +75,10 @@ interface DocumentState {
   cursorPosition: number;
   selectionRange: { start: number; end: number } | null;
   jumpToPosition: number | null;
+  /** Heading to scroll to in preview (triggered by Outline click). */
+  scrollToHeading: { title: string; line: number } | null;
+  /** Current first visible line in editor (for scroll sync to preview). */
+  editorScrollLine: number | null;
   isThreadOpen: boolean;
   /** Bumped whenever PDF bytes change — triggers re-render without storing bytes in state. */
   pdfRevision: number;
@@ -104,6 +108,9 @@ interface DocumentState {
   setSelectionRange: (range: { start: number; end: number } | null) => void;
   requestJumpToPosition: (position: number) => void;
   clearJumpRequest: () => void;
+  requestScrollToHeading: (heading: { title: string; line: number }) => void;
+  clearScrollToHeading: () => void;
+  setEditorScrollLine: (line: number) => void;
   setThreadOpen: (open: boolean) => void;
   setPdfData: (data: Uint8Array | null, rootFileId?: string) => void;
   setCompileError: (error: string | null, rootFileId?: string) => void;
@@ -254,6 +261,8 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
   cursorPosition: 0,
   selectionRange: null,
   jumpToPosition: null,
+  scrollToHeading: null,
+  editorScrollLine: null,
   isThreadOpen: false,
   pdfRevision: 0,
   compileError: null,
@@ -286,6 +295,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
       // Load content for text-based files (skip large non-essential files)
       if (
         f.type === "tex" ||
+        f.type === "md" ||
         f.type === "bib" ||
         f.type === "style" ||
         f.type === "other"
@@ -395,6 +405,12 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
   requestJumpToPosition: (position) => set({ jumpToPosition: position }),
 
   clearJumpRequest: () => set({ jumpToPosition: null }),
+
+  requestScrollToHeading: (heading) => set({ scrollToHeading: heading }),
+
+  clearScrollToHeading: () => set({ scrollToHeading: null }),
+
+  setEditorScrollLine: (line) => set({ editorScrollLine: line }),
 
   addFile: (file) => {
     const id = file.relativePath;
@@ -888,7 +904,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
     const file = state.files.find((f) => f.relativePath === relativePath);
     if (!file) return;
 
-    if (file.type === "tex" || file.type === "bib") {
+    if (file.type === "tex" || file.type === "md" || file.type === "bib") {
       const content = await readTexFileContent(file.absolutePath);
       set((s) => ({
         files: s.files.map((f) =>
@@ -921,6 +937,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
           const updated = { ...existing, fileSize: fsFile.fileSize };
           if (
             updated.type === "tex" ||
+            updated.type === "md" ||
             updated.type === "bib" ||
             updated.type === "style" ||
             updated.type === "other"
@@ -956,6 +973,7 @@ export const useDocumentStore = create<DocumentState>()((set, get) => ({
           pf.type === "other" && fsFile.fileSize > LARGE_FILE_THRESHOLD;
         if (
           pf.type === "tex" ||
+          pf.type === "md" ||
           pf.type === "bib" ||
           pf.type === "style" ||
           (pf.type === "other" && !isLargeNonEssential)
