@@ -23,6 +23,15 @@ function slugifyHeading(title: string): string {
     .trim();
 }
 
+/** Check if a string is a valid CSS ID selector. */
+function isValidCssId(id: string): boolean {
+  // CSS IDs cannot be empty, cannot start with digit/hyphen, must contain at least one valid char
+  if (!id || id.length === 0) return false;
+  if (/^[0-9-]/.test(id)) return false;
+  // Must contain at least one letter or underscore
+  return /[a-zA-Z_]/.test(id);
+}
+
 interface MarkdownPreviewProps {
   /** Ref to the scroll container for direct DOM manipulation from editor */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
@@ -57,8 +66,11 @@ export function MarkdownPreview({ scrollContainerRef }: MarkdownPreviewProps) {
     const container = previewContainerRef.current;
     const slugId = slugifyHeading(scrollToHeading.title);
 
-    // Try to find by ID first (react-markdown generates IDs)
-    let headingEl = container.querySelector(`#${slugId}`) as HTMLElement | null;
+    // Try to find by ID first (react-markdown generates IDs) - only if valid CSS ID
+    let headingEl: HTMLElement | null = null;
+    if (isValidCssId(slugId)) {
+      headingEl = container.querySelector(`#${slugId}`) as HTMLElement | null;
+    }
 
     // If not found by ID, search by text content
     if (!headingEl) {
