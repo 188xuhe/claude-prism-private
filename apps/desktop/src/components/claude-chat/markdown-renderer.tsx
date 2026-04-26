@@ -4,6 +4,8 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { join } from "@tauri-apps/api/path";
 import {
   PlusIcon,
   PlayIcon,
@@ -92,7 +94,9 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
         containerRef.current!.innerHTML = "";
 
         // Clean up any mermaid error elements from previous failed renders
-        document.querySelectorAll(".mermaid-error").forEach((el) => el.remove());
+        document
+          .querySelectorAll(".mermaid-error")
+          .forEach((el) => el.remove());
 
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -112,7 +116,10 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
             const width = svgEl.getAttribute("width");
             const height = svgEl.getAttribute("height");
             if (width && height) {
-              svgEl.setAttribute("viewBox", `0 0 ${parseFloat(width)} ${parseFloat(height)}`);
+              svgEl.setAttribute(
+                "viewBox",
+                `0 0 ${parseFloat(width)} ${parseFloat(height)}`,
+              );
             }
           }
           // Force constrained sizing
@@ -131,7 +138,9 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
         containerRef.current!.innerHTML = "";
 
         // Clean up mermaid's injected error elements from DOM
-        document.querySelectorAll(".mermaid-error").forEach((el) => el.remove());
+        document
+          .querySelectorAll(".mermaid-error")
+          .forEach((el) => el.remove());
         // Also remove any elements with the generated id that mermaid may have created
         document.querySelectorAll(`[id^="mermaid-"]`).forEach((el) => {
           if (!el.closest(".mermaid-block")) {
@@ -146,7 +155,8 @@ const MermaidBlock: FC<{ code: string }> = ({ code }) => {
 
   if (error) {
     // Truncate error message to prevent overflow
-    const truncatedError = error.length > 200 ? `${error.slice(0, 200)}...` : error;
+    const truncatedError =
+      error.length > 200 ? `${error.slice(0, 200)}...` : error;
     return (
       <div className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg border border-destructive/30 bg-destructive/10 p-3">
         <div className="flex items-center gap-2 text-destructive text-sm">
@@ -179,17 +189,42 @@ export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
   content,
   className,
 }) => {
+  const projectRoot = useDocumentStore((s) => s.projectRoot);
+
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       className={className ?? "prose prose-sm dark:prose-invert max-w-none"}
       components={{
+        // Handle relative image paths - convert to Tauri asset URLs
+        img({ src, alt }) {
+          // Skip external URLs and data URLs
+          if (!src || src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+            return <img src={src} alt={alt} />;
+          }
+
+          // For relative paths, convert to Tauri asset URL
+          // Note: We need async join, so we use a fallback approach
+          // React components can't be async, so we handle this differently
+          // Try to construct the URL directly if we have projectRoot
+          if (projectRoot) {
+            // Construct the asset URL directly without async join
+            const absolutePath = src.startsWith("/")
+              ? src
+              : `${projectRoot}/${src}`;
+            const assetUrl = convertFileSrc(absolutePath);
+            return <img src={assetUrl} alt={alt} />;
+          }
+
+          // Fallback: just use the original src
+          return <img src={src} alt={alt} />;
+        },
         pre({ children }) {
           return <>{children}</>;
         },
         code({ className: codeClassName, children, node, ...props }) {
-          const match = /language-(\w+)/. exec(codeClassName || "");
+          const match = /language-(\w+)/.exec(codeClassName || "");
           const language = match?.[1];
           const code = String(children).replace(/\n$/, "");
           const isBlock =
