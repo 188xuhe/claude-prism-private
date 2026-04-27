@@ -127,7 +127,6 @@ function computeStylesFromAttrs(attrs?: Attrs): {
       imgStyle.marginLeft = "auto";
       imgStyle.marginRight = "0";
       break;
-    case "center":
     default:
       containerStyle.margin = "0 auto";
       imgStyle.margin = "0 auto";
