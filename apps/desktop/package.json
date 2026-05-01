@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:dev": "PKG_CONFIG_PATH=\"/opt/homebrew/Cellar/icu4c@78/78.3/lib/pkgconfig\" tauri dev",
     "generate-previews": "tsx scripts/generate-previews.ts",
     "build:macos": "TECTONIC_DEP_BACKEND=vcpkg VCPKG_ROOT=$HOME/vcpkg CXXFLAGS=-std=c++17 CFLAGS= tauri build --target aarch64-apple-darwin --no-sign",
     "test": "vitest run",
