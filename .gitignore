@@ -93,11 +93,16 @@ yarn-error.log*
 *blx.bib
 .bak 
 .mtc
+.omc/
+.husky/
+.remember/
+.superpowers/
 build/
 reference_pr
 reference_pr_claude
 external-libs/
 .playwright-mcp
+.claude/
 
 # License key generator (never push to GitHub)
 generate_license.py
