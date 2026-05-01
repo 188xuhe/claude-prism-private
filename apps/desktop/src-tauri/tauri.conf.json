@@ -63,7 +63,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENBNjAzOTI2NzdDQjdBNkMKUldSc2VzdDNKamxneXMzUnZIK0h3TzZ4WVo4QVFVQlRaSFA1TEhCcGtUYW53ZkhNaDluaWgwZWQK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJGREJEQjZFQUExOURGQTEKUldSaDN4bXFidHZiTDJCT1JxY3htRkpHK0pMMi9GQTFhQlJjWG1ZcU85SDNYaTlCNW9uYlpLZXYK",
       "endpoints": [
         "https://github.com/188xuhe/claude-prism-releases/releases/latest/download/latest.json"
       ]
