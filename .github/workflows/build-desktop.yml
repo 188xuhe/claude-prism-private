@@ -533,7 +533,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/vcpkg/installed
-          key: vcpkg-linux-x64-v1
+          key: vcpkg-linux-x64-v2
 
       - name: Install Linux dependencies (vcpkg)
         if: steps.vcpkg-cache.outputs.cache-hit != 'true'
@@ -541,7 +541,8 @@ jobs:
           VCPKG_BINARY_SOURCES: "clear"
         run: |
           $HOME/vcpkg/vcpkg install \
-            "harfbuzz[graphite2]:x64-linux" \
+            graphite2:x64-linux \
+            harfbuzz:x64-linux \
             fontconfig:x64-linux \
             freetype:x64-linux \
             icu:x64-linux
@@ -551,7 +552,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ~/vcpkg/installed
-          key: vcpkg-linux-x64-v1
+          key: vcpkg-linux-x64-v2
 
       - uses: dtolnay/rust-toolchain@stable
         with:
