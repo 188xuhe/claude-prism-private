@@ -3,7 +3,6 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import mermaid from "mermaid";
 import remarkAttrParser, { type Attrs } from "@/lib/remark-attr-parser";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
@@ -22,13 +21,24 @@ import "katex/dist/katex.min.css";
 
 import { useDocumentStore } from "@/stores/document-store";
 
-// Initialize mermaid with error suppression
-mermaid.initialize({
-  startOnLoad: false,
-  theme: "default",
-  securityLevel: "loose",
-  suppressErrorRendering: true,
-});
+// Lazy load mermaid to avoid module initialization order issues with d3/vite-plugin-top-level-await
+let _mermaid: typeof import("mermaid").default | null = null;
+let _mermaidInitialized = false;
+async function getMermaid() {
+  if (!_mermaid) {
+    _mermaid = await import("mermaid").then((m) => m.default);
+  }
+  if (!_mermaidInitialized && _mermaid) {
+    _mermaid.initialize({
+      startOnLoad: false,
+      theme: "default",
+      securityLevel: "loose",
+      suppressErrorRendering: true,
+    });
+    _mermaidInitialized = true;
+  }
+  return _mermaid!;
+}
 
 // ─── Shell Detection ───
 
@@ -160,6 +170,9 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
 
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+        // Get mermaid instance (lazy loaded to avoid module initialization issues)
+        const mermaid = await getMermaid();
 
         // Render mermaid
         const { svg } = await mermaid.render(id, code);
