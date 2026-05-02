@@ -21,15 +21,14 @@ import "katex/dist/katex.min.css";
 
 import { useDocumentStore } from "@/stores/document-store";
 
-// Lazy load mermaid to avoid module initialization order issues with d3/vite-plugin-top-level-await
-let _mermaid: typeof import("mermaid").default | null = null;
+import mermaid from "mermaid";
+
+// Initialize mermaid lazily on first use
+// Note: Static import is required for Tauri 2 embedded assets - dynamic imports don't work
 let _mermaidInitialized = false;
-async function getMermaid() {
-  if (!_mermaid) {
-    _mermaid = await import("mermaid").then((m) => m.default);
-  }
-  if (!_mermaidInitialized && _mermaid) {
-    _mermaid.initialize({
+function getMermaid() {
+  if (!_mermaidInitialized) {
+    mermaid.initialize({
       startOnLoad: false,
       theme: "default",
       securityLevel: "loose",
@@ -37,7 +36,7 @@ async function getMermaid() {
     });
     _mermaidInitialized = true;
   }
-  return _mermaid!;
+  return mermaid;
 }
 
 // ─── Shell Detection ───
@@ -171,8 +170,8 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        // Get mermaid instance (lazy loaded to avoid module initialization issues)
-        const mermaid = await getMermaid();
+        // Get mermaid instance (static import for Tauri 2 compatibility)
+        const mermaid = getMermaid();
 
         // Render mermaid
         const { svg } = await mermaid.render(id, code);
