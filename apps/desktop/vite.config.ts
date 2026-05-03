@@ -52,5 +52,14 @@ export default defineConfig({
       process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari14",
     minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    rollupOptions: {
+      output: {
+        // Split mermaid and its dependencies into a separate chunk
+        // This prevents the main bundle from being blocked by mermaid's large size
+        manualChunks: {
+          mermaid: ["mermaid"],
+        },
+      },
+    },
   },
 });

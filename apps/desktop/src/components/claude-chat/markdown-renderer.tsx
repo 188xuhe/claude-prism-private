@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import mermaid from "mermaid";
 import remarkAttrParser, { type Attrs } from "@/lib/remark-attr-parser";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { join } from "@tauri-apps/api/path";
@@ -21,23 +22,15 @@ import "katex/dist/katex.min.css";
 
 import { useDocumentStore } from "@/stores/document-store";
 
-import mermaid from "mermaid";
-
-// Initialize mermaid lazily on first use
-// Note: Static import is required for Tauri 2 embedded assets - dynamic imports don't work
-let _mermaidInitialized = false;
-function getMermaid() {
-  if (!_mermaidInitialized) {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: "default",
-      securityLevel: "loose",
-      suppressErrorRendering: true,
-    });
-    _mermaidInitialized = true;
-  }
-  return mermaid;
-}
+// Initialize mermaid once at module load time
+// Note: mermaid is split into a separate chunk via vite.config.ts manualChunks
+// Tauri 2 embedded assets require static imports - dynamic imports are not supported
+mermaid.initialize({
+  startOnLoad: false,
+  theme: "default",
+  securityLevel: "loose",
+  suppressErrorRendering: true,
+});
 
 // ─── Shell Detection ───
 
@@ -170,10 +163,7 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
-        // Get mermaid instance (static import for Tauri 2 compatibility)
-        const mermaid = getMermaid();
-
-        // Render mermaid
+        // Render mermaid (statically imported at module load time)
         const { svg } = await mermaid.render(id, code);
 
         // Insert SVG and constrain its size
