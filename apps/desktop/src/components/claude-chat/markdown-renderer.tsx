@@ -6,7 +6,6 @@ import rehypeKatex from "rehype-katex";
 import mermaid from "mermaid";
 import remarkAttrParser, { type Attrs } from "@/lib/remark-attr-parser";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { join } from "@tauri-apps/api/path";
 import {
   PlusIcon,
   PlayIcon,
