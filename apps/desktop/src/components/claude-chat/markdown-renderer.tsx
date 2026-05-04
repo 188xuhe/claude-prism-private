@@ -1,4 +1,11 @@
-import { type FC, useCallback, useState, useEffect, useRef } from "react";
+import React, {
+  type FC,
+  useCallback,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
@@ -139,25 +146,38 @@ function computeStylesFromAttrs(attrs?: Attrs): {
 
 // ─── Mermaid Block ───
 
-const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
+const MermaidBlock = React.memo(function MermaidBlock({
+  code,
+  attrs,
+}: {
+  code: string;
+  attrs?: Attrs;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Compute styles from attrs
   const { containerStyle } = computeStylesFromAttrs(attrs);
 
+  // Debounced mermaid rendering — wait 500ms after code stabilizes before
+  // rendering. This prevents cascading mermaid.render() calls on every keystroke.
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const render = async () => {
+    const timerId = setTimeout(async () => {
       try {
         // Clear previous content
         containerRef.current!.innerHTML = "";
 
-        // Clean up any mermaid error elements from previous failed renders
-        document
-          .querySelectorAll(".mermaid-error")
-          .forEach((el) => el.remove());
+        // Pre-validate syntax without touching render state
+        try {
+          await mermaid.parse(code);
+        } catch (parseErr) {
+          const message =
+            parseErr instanceof Error ? parseErr.message : String(parseErr);
+          setError(message);
+          return;
+        }
 
         // Generate unique ID for this diagram
         const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -172,7 +192,6 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
         // Ensure SVG fits within container
         const svgEl = container.querySelector("svg");
         if (svgEl) {
-          // Critical: set viewBox if not present to enable proper scaling
           if (!svgEl.hasAttribute("viewBox")) {
             const width = svgEl.getAttribute("width");
             const height = svgEl.getAttribute("height");
@@ -183,7 +202,6 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
               );
             }
           }
-          // Force constrained sizing
           svgEl.removeAttribute("width");
           svgEl.removeAttribute("height");
           svgEl.style.maxWidth = "100%";
@@ -196,49 +214,50 @@ const MermaidBlock: FC<{ code: string; attrs?: Attrs }> = ({ code, attrs }) => {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        containerRef.current!.innerHTML = "";
+
+        // Reset Mermaid state so subsequent diagrams aren't affected
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: "default",
+          securityLevel: "loose",
+          suppressErrorRendering: true,
+        });
 
         // Clean up mermaid's injected error elements from DOM
         document
           .querySelectorAll(".mermaid-error")
           .forEach((el) => el.remove());
-        // Also remove any elements with the generated id that mermaid may have created
         document.querySelectorAll(`[id^="mermaid-"]`).forEach((el) => {
           if (!el.closest(".mermaid-block")) {
             el.remove();
           }
         });
       }
-    };
+    }, 500);
 
-    render();
+    return () => clearTimeout(timerId);
   }, [code]);
 
-  if (error) {
-    // Truncate error message to prevent overflow
-    const truncatedError =
-      error.length > 200 ? `${error.slice(0, 200)}...` : error;
-    return (
-      <div className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg border border-destructive/30 bg-destructive/10 p-3">
-        <div className="flex items-center gap-2 text-destructive text-sm">
-          <AlertTriangleIcon className="size-4 shrink-0" />
-          <span className="font-medium">Mermaid syntax error</span>
-        </div>
-        <pre className="mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words font-mono text-destructive/80 text-xs">
-          {truncatedError}
-        </pre>
-      </div>
-    );
-  }
-
+  // Always render container div — error shown as inline badge inside it.
+  // This prevents the oscillation loop that occurred with conditional rendering.
   return (
     <div
       ref={containerRef}
       className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg bg-muted/50 p-4"
       style={containerStyle}
-    />
+    >
+      {error && (
+        <div className="mb-2 flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1 text-red-400 text-xs">
+          <AlertTriangleIcon className="size-3 shrink-0" />
+          <span className="font-medium">Mermaid syntax error</span>
+          <span className="ml-1 max-w-[200px] truncate text-red-400/60">
+            {error.length > 80 ? `${error.slice(0, 80)}...` : error}
+          </span>
+        </div>
+      )}
+    </div>
   );
-};
+});
 
 /**
  * Extract attrs from hast node properties (set via hProperties from remark-rehype)
@@ -273,140 +292,179 @@ interface MarkdownRendererProps {
   projectRoot?: string | null;
 }
 
+// Plugin arrays are static — hoist to module scope so ReactMarkdown skips re-processing
+const REMARK_PLUGINS = [remarkAttrParser, remarkGfm, remarkMath];
+const REHYPE_PLUGINS = [rehypeKatex];
+
 export const MarkdownRenderer: FC<MarkdownRendererProps> = ({
   content,
   className,
   projectRoot,
 }) => {
+  // Throttle rendered content during streaming — ReactMarkdown is expensive
+  // to re-run on every token. Update at ~150ms intervals, snap to final value.
+  const [renderedContent, setRenderedContent] = useState(content);
+  const rafRef = useRef<number>(0);
+  const lastRenderRef = useRef(0);
+
+  useEffect(() => {
+    const now = Date.now();
+    const elapsed = now - lastRenderRef.current;
+    if (elapsed >= 150) {
+      lastRenderRef.current = now;
+      setRenderedContent(content);
+    } else {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        lastRenderRef.current = Date.now();
+        setRenderedContent(content);
+      });
+    }
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [content]);
+
+  // Stabilize components object — only recreate when projectRoot changes
+  // (img handler closes over projectRoot; everything else is pure)
+  const components = useMemo(
+    () => ({
+      img({ src, alt, node }: { src?: string; alt?: string; node?: unknown }) {
+        const attrs = extractAttrsFromNode(node);
+        const { imgStyle } = computeStylesFromAttrs(attrs);
+
+        if (
+          !src ||
+          src.startsWith("http://") ||
+          src.startsWith("https://") ||
+          src.startsWith("data:")
+        ) {
+          return <img src={src} alt={alt} style={imgStyle} />;
+        }
+
+        if (!projectRoot) {
+          return (
+            <span className="inline-block rounded bg-muted px-2 py-1 text-muted-foreground text-sm">
+              [Image loading...]
+            </span>
+          );
+        }
+
+        const normalizedSrc = src.replace(/\\/g, "/");
+        const absolutePath = normalizedSrc.startsWith("/")
+          ? normalizedSrc
+          : `${projectRoot}/${normalizedSrc}`;
+        const assetUrl = convertFileSrc(absolutePath);
+        return <img src={assetUrl} alt={alt} style={imgStyle} />;
+      },
+      pre({ children }: { children?: React.ReactNode }) {
+        return <>{children}</>;
+      },
+      code({
+        className: codeClassName,
+        children,
+        node,
+        ...props
+      }: {
+        className?: string;
+        children?: React.ReactNode;
+        node?: unknown;
+      }) {
+        const match = /language-(\w+)/.exec(codeClassName || "");
+        const language = match?.[1];
+        const code = String(children).replace(/\n$/, "");
+        const nodePos = (
+          node as {
+            position?: { start: { line: number }; end: { line: number } };
+          }
+        )?.position;
+        const isBlock = nodePos && nodePos.start.line !== nodePos.end.line;
+
+        const attrs = extractAttrsFromNode(node);
+
+        if (!match && !isBlock) {
+          return (
+            <code className={codeClassName} {...props}>
+              {children}
+            </code>
+          );
+        }
+
+        if (language === "mermaid") {
+          const sourceLine = nodePos?.start?.line ?? 0;
+          return (
+            <MermaidBlock
+              key={`mermaid-${sourceLine}`}
+              code={code}
+              attrs={attrs}
+            />
+          );
+        }
+
+        return <CodeBlock language={language || ""} code={code} />;
+      },
+      p({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <p data-source-line={line}>{children}</p>;
+      },
+      h1({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h1 data-source-line={line}>{children}</h1>;
+      },
+      h2({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h2 data-source-line={line}>{children}</h2>;
+      },
+      h3({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h3 data-source-line={line}>{children}</h3>;
+      },
+      h4({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h4 data-source-line={line}>{children}</h4>;
+      },
+      h5({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h5 data-source-line={line}>{children}</h5>;
+      },
+      h6({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <h6 data-source-line={line}>{children}</h6>;
+      },
+      li({ node, children }: { node?: unknown; children?: React.ReactNode }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <li data-source-line={line}>{children}</li>;
+      },
+      blockquote({
+        node,
+        children,
+      }: {
+        node?: unknown;
+        children?: React.ReactNode;
+      }) {
+        const line = (node as { position?: { start: { line: number } } })
+          ?.position?.start?.line;
+        return <blockquote data-source-line={line}>{children}</blockquote>;
+      },
+    }),
+    [projectRoot],
+  );
+
   return (
     <ReactMarkdown
       key={projectRoot ? `with-root-${projectRoot}` : "no-root"}
-      remarkPlugins={[remarkAttrParser, remarkGfm, remarkMath]}
-      rehypePlugins={[rehypeKatex]}
+      remarkPlugins={REMARK_PLUGINS}
+      rehypePlugins={REHYPE_PLUGINS}
       className={className ?? "prose prose-sm dark:prose-invert max-w-none"}
-      components={{
-        // Handle relative image paths - convert to Tauri asset URLs
-        img({ src, alt, node }) {
-          console.log("[MarkdownRenderer] img handler called", {
-            src,
-            projectRoot,
-            hasProjectRoot: !!projectRoot,
-            nodeProperties: node?.properties,
-          });
-
-          // Extract attrs from node properties (set by remarkAttrParser via hProperties)
-          const attrs = extractAttrsFromNode(node);
-          const { imgStyle } = computeStylesFromAttrs(attrs);
-
-          // Skip external URLs and data URLs
-          if (
-            !src ||
-            src.startsWith("http://") ||
-            src.startsWith("https://") ||
-            src.startsWith("data:")
-          ) {
-            return <img src={src} alt={alt} style={imgStyle} />;
-          }
-
-          // For relative paths, we need projectRoot to convert to Tauri asset URL
-          // If projectRoot is not available yet, show a placeholder
-          if (!projectRoot) {
-            console.log(
-              "[MarkdownRenderer] projectRoot is null, showing placeholder",
-            );
-            return (
-              <span className="inline-block rounded bg-muted px-2 py-1 text-muted-foreground text-sm">
-                [Image loading...]
-              </span>
-            );
-          }
-
-          // Convert relative path to Tauri asset URL
-          const normalizedSrc = src.replace(/\\/g, "/");
-          const absolutePath = normalizedSrc.startsWith("/")
-            ? normalizedSrc
-            : `${projectRoot}/${normalizedSrc}`;
-          const assetUrl = convertFileSrc(absolutePath);
-          console.log("[MarkdownRenderer] converted to assetUrl", {
-            absolutePath,
-            assetUrl,
-          });
-          return <img src={assetUrl} alt={alt} style={imgStyle} />;
-        },
-        pre({ children }) {
-          return <>{children}</>;
-        },
-        code({ className: codeClassName, children, node, ...props }) {
-          const match = /language-(\w+)/.exec(codeClassName || "");
-          const language = match?.[1];
-          const code = String(children).replace(/\n$/, "");
-          const isBlock =
-            node?.position &&
-            node.position.start.line !== node.position.end.line;
-
-          // Extract attrs from node properties (set by remarkAttrParser via hProperties)
-          const attrs = extractAttrsFromNode(node);
-          console.log("[MarkdownRenderer] code handler called", {
-            language,
-            nodeProperties: node?.properties,
-            attrs,
-          });
-
-          if (!match && !isBlock) {
-            return (
-              <code className={codeClassName} {...props}>
-                {children}
-              </code>
-            );
-          }
-
-          // Handle mermaid diagrams
-          if (language === "mermaid") {
-            return <MermaidBlock code={code} attrs={attrs} />;
-          }
-
-          return <CodeBlock language={language || ""} code={code} />;
-        },
-        // Add data-source-line for scroll sync
-        p({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <p data-source-line={line}>{children}</p>;
-        },
-        h1({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h1 data-source-line={line}>{children}</h1>;
-        },
-        h2({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h2 data-source-line={line}>{children}</h2>;
-        },
-        h3({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h3 data-source-line={line}>{children}</h3>;
-        },
-        h4({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h4 data-source-line={line}>{children}</h4>;
-        },
-        h5({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h5 data-source-line={line}>{children}</h5>;
-        },
-        h6({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <h6 data-source-line={line}>{children}</h6>;
-        },
-        li({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <li data-source-line={line}>{children}</li>;
-        },
-        blockquote({ node, children }) {
-          const line = node?.position?.start?.line;
-          return <blockquote data-source-line={line}>{children}</blockquote>;
-        },
-      }}
+      components={components}
     >
-      {content}
+      {renderedContent}
     </ReactMarkdown>
   );
 };
@@ -420,10 +478,13 @@ type RunState =
   | { status: "done"; exitCode: number; stdout: string; stderr: string }
   | { status: "error"; message: string };
 
-const CodeBlock: FC<{ language: string; code: string }> = ({
+const CodeBlock = React.memo(function CodeBlock({
   language,
   code,
-}) => {
+}: {
+  language: string;
+  code: string;
+}) {
   const insertAtCursor = useDocumentStore((s) => s.insertAtCursor);
   const projectRoot = useDocumentStore((s) => s.projectRoot);
   const isLatex = language === "latex" || language === "tex";
@@ -571,7 +632,7 @@ const CodeBlock: FC<{ language: string; code: string }> = ({
       )}
     </div>
   );
-};
+});
 
 // ─── Command Output ───
 
