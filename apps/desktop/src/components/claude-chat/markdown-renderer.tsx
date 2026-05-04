@@ -153,7 +153,7 @@ const MermaidBlock = React.memo(function MermaidBlock({
   code: string;
   attrs?: Attrs;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const svgContainerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Compute styles from attrs
@@ -161,14 +161,13 @@ const MermaidBlock = React.memo(function MermaidBlock({
 
   // Debounced mermaid rendering — wait 500ms after code stabilizes before
   // rendering. This prevents cascading mermaid.render() calls on every keystroke.
+  // Uses svgContainerRef (a dedicated inner div) for SVG insertion so React-managed
+  // children (error badge) in the outer div are never destroyed by innerHTML manipulation.
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!svgContainerRef.current) return;
 
     const timerId = setTimeout(async () => {
       try {
-        // Clear previous content
-        containerRef.current!.innerHTML = "";
-
         // Pre-validate syntax without touching render state
         try {
           await mermaid.parse(code);
@@ -185,8 +184,8 @@ const MermaidBlock = React.memo(function MermaidBlock({
         // Render mermaid (statically imported at module load time)
         const { svg } = await mermaid.render(id, code);
 
-        // Insert SVG and constrain its size
-        const container = containerRef.current!;
+        // Insert SVG into the dedicated inner container (not the outer div)
+        const container = svgContainerRef.current!;
         container.innerHTML = svg;
 
         // Ensure SVG fits within container
@@ -240,9 +239,10 @@ const MermaidBlock = React.memo(function MermaidBlock({
 
   // Always render container div — error shown as inline badge inside it.
   // This prevents the oscillation loop that occurred with conditional rendering.
+  // SVG goes into a dedicated inner div (svgContainerRef) so innerHTML manipulation
+  // never conflicts with React-managed children in the outer div.
   return (
     <div
-      ref={containerRef}
       className="mermaid-block my-2 max-w-full overflow-hidden rounded-lg bg-muted/50 p-4"
       style={containerStyle}
     >
@@ -255,6 +255,7 @@ const MermaidBlock = React.memo(function MermaidBlock({
           </span>
         </div>
       )}
+      <div ref={svgContainerRef} />
     </div>
   );
 });

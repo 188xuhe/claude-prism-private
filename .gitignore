@@ -103,6 +103,7 @@ reference_pr_claude
 external-libs/
 .playwright-mcp
 .claude/
+CLAUDE.md
 
 # License key generator (never push to GitHub)
 generate_license.py

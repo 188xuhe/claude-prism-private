@@ -309,7 +309,7 @@ const UserMessage: FC<{ message: ClaudeStreamMessage }> = ({ message }) => {
 const AssistantMessage: FC<{
   message: ClaudeStreamMessage;
   toolResultMap: Map<string, ContentBlock>;
-}> = ({ message, toolResultMap }) => {
+}> = memo(({ message, toolResultMap }) => {
   const content = message.message?.content;
   if (!Array.isArray(content) || content.length === 0) return null;
 
@@ -353,7 +353,7 @@ const AssistantMessage: FC<{
       </div>
     </div>
   );
-};
+});
 
 // ─── Result Message ───
 
