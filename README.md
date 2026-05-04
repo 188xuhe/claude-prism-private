@@ -60,7 +60,7 @@ ClaudePrism is a **local-first** alternative — your files are stored on your d
 | Scientific Skills | — | **100+ domain skills (bioinformatics, cheminformatics, ML, ...)** |
 | Getting Started | Account setup required | **Install and go — template gallery + project wizard** |
 | Version Control | — | **Git-based history with labels & diff** |
-| Source Code | Proprietary | **Open source (MIT)** |
+| Source Code | Proprietary | **AGPL-3.0 with Commons Clause** |
 
 ### Data & Privacy
 
@@ -161,4 +161,4 @@ This project started from [Open Prism](https://github.com/assistant-ui/open-pris
 
 ## License
 
-[MIT](./LICENSE)
+[AGPL-3.0 with Commons Clause & Derivative Work Restriction](./LICENSE)

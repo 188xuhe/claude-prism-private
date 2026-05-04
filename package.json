@@ -1,6 +1,7 @@
 {
   "name": "@claude-prism/root",
-  "description": "Open-Source AI LaTeX writing workspace",
+  "description": "AI LaTeX writing workspace",
+  "license": "AGPL-3.0 WITH Commons-Clause",
   "version": "2.0.2",
   "repository": {
     "type": "git",
