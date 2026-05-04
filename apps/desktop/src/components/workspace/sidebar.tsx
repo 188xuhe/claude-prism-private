@@ -26,6 +26,14 @@ import {
   TerminalIcon,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { getProjectFileType, type ProjectFileType } from "@/lib/tauri/fs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DndContext,
   DragOverlay,
@@ -457,6 +465,7 @@ export function Sidebar() {
   const [renameFileId, setRenameFileId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [newFileName, setNewFileName] = useState("");
+  const [newFileType, setNewFileType] = useState<ProjectFileType>("tex");
   const [newFolderName, setNewFolderName] = useState("");
 
   // Folder expand/collapse
@@ -540,16 +549,26 @@ export function Sidebar() {
       setNameError("A file or folder with this name already exists");
       return;
     }
-    // Auto-append .tex if no extension provided
-    const finalName = /\.\w+$/.test(name) ? name : `${name}.tex`;
-    const lower = finalName.toLowerCase();
-    const type: "tex" | "image" = /\.(png|jpg|jpeg|gif|svg|bmp|webp)$/.test(
-      lower,
-    )
-      ? "image"
-      : "tex";
+    // Auto-append extension based on selected type if user didn't provide one
+    const EXTENSION_MAP: Record<ProjectFileType, string> = {
+      tex: ".tex",
+      md: ".md",
+      bib: ".bib",
+      style: ".sty",
+      image: "",
+      pdf: "",
+      other: "",
+    };
+    const hasExtension = /\.\w+$/.test(name);
+    const finalName = hasExtension
+      ? name
+      : `${name}${EXTENSION_MAP[newFileType]}`;
+    // Use getProjectFileType for actual classification (overrides dropdown if
+    // user typed a different extension)
+    const type = getProjectFileType(finalName) ?? "other";
     createNewFile(finalName, type, addDialogFolder);
     setNewFileName("");
+    setNewFileType("tex");
     setNameError("");
     setAddDialogOpen(false);
     setAddDialogFolder(undefined);
@@ -707,7 +726,7 @@ export function Sidebar() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => openNewFileDialog()}>
                       <FileTextIcon className="mr-2 size-4" />
-                      New LaTeX File
+                      New File
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => openNewFolderDialog()}>
                       <FolderPlusIcon className="mr-2 size-4" />
@@ -878,19 +897,47 @@ export function Sidebar() {
               New File{addDialogFolder ? ` in ${addDialogFolder}` : ""}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 py-4">
-            <Input
-              placeholder="filename.tex"
-              value={newFileName}
-              onChange={(e) => {
-                setNewFileName(e.target.value);
-                setNameError("");
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddFile();
-              }}
-              autoFocus
-            />
+          <div className="space-y-3 py-4">
+            <div className="flex items-center gap-2">
+              <Select
+                value={newFileType}
+                onValueChange={(v) => setNewFileType(v as ProjectFileType)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="tex">TeX (.tex)</SelectItem>
+                  <SelectItem value="md">Markdown (.md)</SelectItem>
+                  <SelectItem value="bib">Bibliography (.bib)</SelectItem>
+                  <SelectItem value="style">Style (.sty)</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder={
+                  newFileType === "tex"
+                    ? "filename.tex"
+                    : newFileType === "md"
+                      ? "filename.md"
+                      : newFileType === "bib"
+                        ? "filename.bib"
+                        : newFileType === "style"
+                          ? "filename.sty"
+                          : "filename.ext"
+                }
+                value={newFileName}
+                onChange={(e) => {
+                  setNewFileName(e.target.value);
+                  setNameError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddFile();
+                }}
+                autoFocus
+                className="flex-1"
+              />
+            </div>
             {nameError && (
               <p className="text-destructive text-xs">{nameError}</p>
             )}
