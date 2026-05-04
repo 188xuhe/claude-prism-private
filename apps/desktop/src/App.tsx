@@ -104,22 +104,21 @@ export function App({ onReady }: { onReady?: () => void }) {
   // Register global keyboard shortcuts (Cmd+S, Cmd+N) at the app level
   useKeyboardShortcuts();
 
-  useEffect(() => {
-    onReady?.();
-  }, [onReady]);
-
-  // Check license on mount
+  // Check license on mount — call onReady only after content is ready to render,
+  // so the window appears with UI instead of a blank white/black screen.
   useEffect(() => {
     invoke<{ activated: boolean }>("check_license")
       .then((result) => {
         setLicenseActivated(result.activated);
         setLicenseChecked(true);
+        onReady?.();
       })
       .catch(() => {
         setLicenseActivated(false);
         setLicenseChecked(true);
+        onReady?.();
       });
-  }, []);
+  }, [onReady]);
 
   // Listen for debug panel toggle (Ctrl+Shift+D)
   useEffect(() => {
